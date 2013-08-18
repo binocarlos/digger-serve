@@ -22,7 +22,6 @@
   "dependencies": {
     "socket.io": "~0.9.16",
     "express": "~3.3.5",
-    "socket.io-express": "0.0.1",
     "connect-redis": "~1.4.5"
   }
 }

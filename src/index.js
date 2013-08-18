@@ -21,7 +21,6 @@ var express = require('express');
 var vhostproto = require('./vhost');
 var RedisStore = require('connect-redis')(express);
 var sockets = require('socket.io');
-var sockets_express = require('socket.io-express');
 
 module.exports = function(options){
 
@@ -39,7 +38,7 @@ module.exports = function(options){
 	io.enable('browser client minification');  // send minified client
 	io.enable('browser client etag');          // apply etag caching logic based on version number
 	io.enable('browser client gzip');          // gzip the file
-	io.set('log level', 1);                    // reduce logging
+	io.set('log level', process.env.NODE_ENV==='development' ? 1 : 1);                    // reduce logging
 
 	// enable all transports (optional if you want flashsocket support, please note that some hosting
 	// providers do not allow you to create servers that listen on a port different than 80 or their
@@ -62,7 +61,33 @@ module.exports = function(options){
 	
 	});
 
-	var authFunction = sockets_express.createAuthFunction(cookieParser, redisStore);
+	var _cookie = 'connect.sid';
+
+	function authFunction(data, accept){
+    if (data && data.headers && data.headers.cookie) {
+      cookieParser(data, {}, function(err){
+        if(err){
+          return accept('COOKIE_PARSE_ERROR');
+        }
+        var sessionId = data.signedCookies[_cookie];
+        redisStore.get(sessionId, function(err, session){
+          if(err || !session || !session.auth || !session.auth.loggedIn){
+            //accept('NOT_LOGGED_IN', false);
+
+            // not logged in but we still want a socket
+            accept(null, true);
+          }
+          else{
+            data.session = session;
+            accept(null, true);
+          }
+        });
+      });
+    } else {
+      return accept('MISSING_COOKIE', false);
+    }
+	}
+
 	io.set('authorization', authFunction);
 
 	var vhostobj = new vhostproto();
@@ -79,4 +104,3 @@ module.exports = function(options){
 		io:io
 	}
 }
-
