@@ -97,7 +97,15 @@ module.exports = function(options){
 	return {
 		app:app,
 		register:function(url, app){
-			vhostobj.register(url, app);
+			vhostobj.register(url, function(req, res, next){
+				/*
+				
+					flag the request as having hit a website
+					
+				*/
+				req._hitwebsite = true;
+				app(req, res, next);
+			})
 		},
 		express:express,
 		server:server,
