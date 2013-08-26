@@ -10,13 +10,9 @@ Vhost.prototype.vhost = function() {
 		var host = req.headers.host.split(':')[0];
 		var server = hostDictionary[host];
 		if (!server){
-			var parts = host.split('.');
-			parts[0] = '*';
-			server = hostDictionary[parts.join('.')];
-			if(!server){
-				return next();	
-			}
-		} 
+			server = hostDictionary['*' + host.substr(host.indexOf('.'))];
+		}
+		if (!server) return next();
 		if ('function' == typeof server) return server(req, res, next);
 		server.emit('request', req, res);
 	};

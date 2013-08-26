@@ -18,22 +18,28 @@
 
 var http = require('http');
 var express = require('express');
-var vhostproto = require('./vhost');
 var RedisStore = require('connect-redis')(express);
 var sockets = require('socket.io');
+var path = require('path');
+
+var Injector = require('./injector');
+var ErrorHandler = require('./errorhandler');
+var Vhost = require('./vhost');
 
 module.exports = function(options){
 
 	options = options || {};
 
 	var redisStore = new RedisStore({
-		host:options.redis_host || '127.0.0.1',
-		port:options.redis_port || 6379
+		host:options.redis_host || process.env.DIGGER_REDIS_HOST || '127.0.0.1',
+		port:options.redis_port || process.env.DIGGER_REDIS_PORT || 6379,
+		pass:options.redis_pass || process.env.DIGGER_REDIS_PASSWORD || null
 	})
 
 	var app = express();
 	var server = http.createServer(app);
 	var io = sockets.listen(server);
+	var vhost = new Vhost();
 
 	io.enable('browser client minification');  // send minified client
 	io.enable('browser client etag');          // apply etag caching logic based on version number
@@ -63,6 +69,12 @@ module.exports = function(options){
 
 	var _cookie = 'connect.sid';
 
+	/*
+	
+		the socket connects and we extract the session data so we get
+		access to the user from a socket request
+		
+	*/
 	function authFunction(data, accept){
     if (data && data.headers && data.headers.cookie) {
       cookieParser(data, {}, function(err){
@@ -88,27 +100,220 @@ module.exports = function(options){
     }
 	}
 
-	io.set('authorization', authFunction);
+  /*
+  
+  	functional connector to the reception server
 
-	var vhostobj = new vhostproto();
+  	all of the requests travel via here
+
+  */
+  function connector(){
+  	return function(req, reply){
+
+  		app.emit('digger:request', {
+  			url:req.url,
+  			method:req.method,
+  			headers:headers,
+  			body:JSON.stringify(req.body)
+  		}, function(error, result){
+  			if(error){
+  				reply(error);
+  				return;
+  			}
+  			else{
+  				reply(null, result);
+  			}
+  		})
+  	}
+  }
+
+
+	/*
 	
-	app.use(vhostobj.vhost())
+		a client has connected their socket to the web app
+
+		we proxy digger requests back to the reception socket handler
+		
+	*/
+	function socket_connector(){
+
+    var supplychain = connector();
+
+    return function (socket) {
+
+      var session = socket.handshake.session || {};
+      var auth = session.auth || {};
+      var user = auth.user;
+
+      /*
+      
+        these are the browser socket methods travelling via our reception connector
+        
+      */
+      socket.on('request', function(req, reply){
+        var headers = req.headers || {};
+        headers['x-json-user'] = user;
+        /*
+        
+          it is important to map the request here to prevent properties being injected from outside
+          
+        */
+        supplychain({
+          method:req.method,
+          url:req.url,
+          headers:headers,
+          body:req.body
+        }, function(error, results){
+          reply({
+            error:error,
+            results:results
+          })
+        })
+      })
+      
+    }
+  }
+
+
+  /*
+  
+  	direct proxy through to the reception server
+  	
+  */
+  function http_connector(){
+
+  	var supplychain = connector();
+
+  	return function(req, res){
+  		var auth = req.session.auth || {};
+      var user = auth.user;
+
+      var headers = req.headers;
+
+  		var headers = {};
+  		for(var prop in (req.headers || {})){
+  			var value = req.headers[prop];
+
+  			if(prop.indexOf('x-json')==0 && typeof(value)=='string'){
+  				value = JSON.parse(value);
+  			}
+  			headers[prop] = value;
+  		}
+
+      if(user){
+      	headers['x-json-user'] = user;
+      }
+
+      supplychain({
+        method:req.method.toLowerCase(),
+        url:req.url,
+        headers:headers,
+        body:req.body
+      }, function(error, result){
+	      if(error){
+	        var statusCode = 500;
+	        error = error.replace(/^(\d+):/, function(match, code){
+	          statusCode = code;
+	          return '';
+	        })
+	        res.statusCode = statusCode;
+	        res.send(error);
+	      }
+	      else{
+	        res.json(result || []);
+	      }
+	    })
+
+  	}
+
+  }
+
+  /*
+		  
+  	the socket connector - this is for all applications running
+  	
+  */
+	io.set('authorization', authFunction);
+  io.sockets.on('connection', socket_connector());
+
+  /*
+  
+  	this is when we mount an app without any domains
+  	
+  */
+  var singleapp = null;
+  app.use(vhost.vhost());
+  app.use(function(req, res, next){
+  	if(singleapp){
+  		singleapp(req, res, next);
+  	}
+  	else{
+  		next();
+  	}
+  })
+  app.use('/__digger/assets', express.static(path.normalize(__dirname + '/../assets')));
+  app.use(ErrorHandler());
+  
+
 
 	return {
 		app:app,
-		register:function(url, app){
-			vhostobj.register(url, function(req, res, next){
-				/*
-				
-					flag the request as having hit a website
-					
-				*/
-				req._hitwebsite = true;
-				app(req, res, next);
-			})
-		},
 		express:express,
 		server:server,
-		io:io
+		io:io,
+
+		/*
+		
+			add a website to the vhost
+			
+		*/
+		add_website:function(domains, application){
+			if(arguments.length<=1){
+				singleapp = application;
+			}
+			else{
+				domains.forEach(function(domain){
+					vhost.register(domain, application);
+				})
+			}
+		},
+
+		/*
+		
+			generate a digger application that is all ready to go
+
+			it is just an express app and so can be mounted onto webservers
+		*/
+		digger_application:function(){
+
+			// create a sub express application to make the routing easy
+			var diggerapp = express();
+
+		  /*
+  
+		    code injection for the client
+		    
+		  */
+		  diggerapp.get('/digger.js', Injector());
+		  diggerapp.get('/digger.min.js', Injector({
+		    minified:true
+		  }));
+		  diggerapp.get('/:driver/digger.js', Injector({
+		    pathdriver:true
+		  }));
+		  diggerapp.get('/:driver/digger.min.js', Injector({
+		    pathdriver:true,
+		    minified:true
+		  }));
+
+		  /*
+		  
+		  	pass all other requests through to the reception api
+		  	
+		  */
+		  diggerapp.use(http_connector());
+
+		  return diggerapp;
+		}
 	}
 }
