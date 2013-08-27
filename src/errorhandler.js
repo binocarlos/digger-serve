@@ -33,7 +33,7 @@ module.exports = function(){
 		var pagetext = 'There has been an unknown error.';
 		var pagedata = '';
 		if(res.statusCode===404){
-			if(req._hitwebsite){
+			if(req.headers['x-digger-app']){
 				pagetitle = 'Page not found';
 				pagetext = 'This website does not have a page at that pathname';
 				pagedata = req.url;

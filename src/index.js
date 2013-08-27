@@ -24,7 +24,7 @@ var path = require('path');
 
 var Injector = require('./injector');
 var ErrorHandler = require('./errorhandler');
-var Vhost = require('./vhost');
+var vhost = require('express-vhost');
 
 module.exports = function(options){
 
@@ -38,8 +38,7 @@ module.exports = function(options){
 
 	var app = express();
 	var server = http.createServer(app);
-	var io = sockets.listen(server);
-	var vhost = new Vhost();
+	var io = sockets.listen(server);	
 
 	io.enable('browser client minification');  // send minified client
 	io.enable('browser client etag');          // apply etag caching logic based on version number
@@ -113,8 +112,8 @@ module.exports = function(options){
   		app.emit('digger:request', {
   			url:req.url,
   			method:req.method,
-  			headers:headers,
-  			body:JSON.stringify(req.body)
+  			headers:req.headers,
+  			body:req.body
   		}, function(error, result){
   			if(error){
   				reply(error);

@@ -16,7 +16,7 @@ browserify:
 	browserify -r digger-sockets > build/sockets.js
 
 uglify: browserify
-	uglifyjs src/clients/sockets.js > build/sockets.min.js
+	uglifyjs build/sockets.js > build/sockets.min.js
 
 build: uglify
 
