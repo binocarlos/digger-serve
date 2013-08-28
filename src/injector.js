@@ -21,6 +21,7 @@ var path = require('path');
 
 module.exports = function(options){
   options = options || {};
+  var appconfig = options.appconfig || {};
   return function(req, res, next){
 
     var host = req.headers.host;
@@ -70,16 +71,22 @@ module.exports = function(options){
           user:user
         }
 
+        for(var prop in appconfig){
+          if(prop!='hq_endpoints'){
+            digger_config[prop] = appconfig[prop];  
+          }
+        }
+
         code += [
-          "(function(window){",
+          "window.$digger = window.$digger || (function($diggerconfig){",
           " var useconfig = " + JSON.stringify(digger_config, null, 4) + ";",
-          " if(window.$diggerconfig){",
+          " if($diggerconfig){",
           "   for(var prop in window.$diggerconfig){",
           "     useconfig[prop] = window.$diggerconfig[prop];",
           "   }",
           " }",
-          " window.$digger = require('digger-" + driver + "')(useconfig);",
-          "})(window)"
+          " return require('digger-" + driver + "')(useconfig);",
+          "})(window.$diggerconfig)"
         ].join("\n");
         res.send(code);
       }

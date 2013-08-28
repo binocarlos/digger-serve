@@ -1101,7 +1101,7 @@ Container.prototype.summary = function(options){
 Container.prototype.toString = function(){
   return this.summary();
 }
-},{"digger-utils":3,"dotty":4,"events":31,"util":32}],7:[function(require,module,exports){
+},{"digger-utils":3,"dotty":4,"events":32,"util":33}],7:[function(require,module,exports){
 /*
 
   (The MIT License)
@@ -3334,7 +3334,7 @@ Container.prototype.summary = function(options){
 Container.prototype.toString = function(){
   return this.summary();
 }
-},{"digger-utils":24,"dotty":19,"events":31,"util":32}],22:[function(require,module,exports){
+},{"digger-utils":24,"dotty":19,"events":32,"util":33}],22:[function(require,module,exports){
 module.exports=require(1)
 },{}],23:[function(require,module,exports){
 module.exports=require(2)
@@ -3570,7 +3570,7 @@ SupplyChain.prototype.merge = function(contracts){
 SupplyChain.prototype.pipe = function(contracts){
   return this.contract_group('pipe', contracts);
 }
-},{"__browserify_process":33,"digger-container":20,"digger-utils":24,"events":31,"util":32}],26:[function(require,module,exports){
+},{"__browserify_process":34,"digger-container":20,"digger-utils":24,"events":32,"util":33}],26:[function(require,module,exports){
 /*
 
   (The MIT License)
@@ -7509,17 +7509,6 @@ if (typeof define === "function" && define.amd) {
 */
 var blueprints = {};
 
-function add_single(name, print){
-	if($digger.config.debug){
-		console.log('-------------------------------------------');
-		console.log('blueprint: ' + name);
-		console.dir(print);
-	}
-
-	print.fields = print.find('field').models;
-	blueprints[name] = print;
-}
-
 module.exports = function(){
 	return {
 	  add:function(blueprint){
@@ -7531,7 +7520,7 @@ module.exports = function(){
 	  			blueprint.fields = [];
 	  		}
 	  	}
-	  	
+
 	  	blueprints[blueprint.title()] = blueprint;
 	  	
 	    return this;
@@ -7541,6 +7530,13 @@ module.exports = function(){
 	      return blueprints;
 	    }
 	    return blueprints[name];
+	  },
+	  all:function(){
+	  	var ret = {};
+	  	for(var prop in blueprints){
+	  		ret[prop] = blueprints[prop];
+	  	}
+	  	return ret;
 	  },
 	  create:function(name){
 			var blueprint = this.get(name);
@@ -7570,6 +7566,8 @@ module.exports = function(){
 	  }
 	}
 }
+},{}],"digger-sockets":[function(require,module,exports){
+module.exports=require('E9YBgr');
 },{}],"E9YBgr":[function(require,module,exports){
 /*
 
@@ -7606,13 +7604,15 @@ var Template = require('./templates');
 */
 module.exports = function(config){
 
-	console.log('-------------------------------------------');
-	console.log('-------------------------------------------');
-	console.log('CONFIG');
-	console.dir(config);
-
 	config = config || {};
 
+	if(config.debug){
+		console.log('-------------------------------------------');
+		console.log('-------------------------------------------');
+		console.log('CONFIG');
+		console.dir(config);	
+	}
+	
 	var connecturl = '//' + (config.host || 'localhost');
 
 	var socket = Sockets.connect(connecturl);
@@ -7630,6 +7630,73 @@ module.exports = function(config){
 		})
 	}
 
+	function padding(offset){
+		offset = offset || 0;
+		var st = '';
+		for(var i=0; i<offset; i++){
+			st += '    ';
+		}
+		return st;
+	}
+
+	function is_contract(req){
+		return req.url=='/reception' && req.method=='post';
+	}
+
+	function log_contract(contract, offset){
+		console.log(padding(offset) + '-------------------------------------------');
+		console.log(padding(offset) + 'contract: ' + contract.headers['x-contract-type']);
+		offset++;
+		var summary = [];
+		(contract.body || []).forEach(function(child){
+			summary.push(log_request(child, offset));
+		})
+		return 'contract: ' + summary.join(' ' + contract.headers['x-contract-type'] + ' ');
+	}
+
+	function log_warehouse_request(req, offset){
+		var extra = '';
+		if(req.headers['x-json-selector']){
+			var selector = req.headers['x-json-selector'];
+			extra = ' - select: ' + selector.string;
+		}
+		var summary = 'request: ' + req.method + ' ' + req.url + extra;
+		console.log(padding(offset) + '-------------------------------------------');
+		console.log(padding(offset) + summary);
+
+		return summary;
+	}
+
+	function log_request(packet, offset){
+		offset = offset || 0;
+		var summary = '';
+		if(is_contract(packet)){
+			summary = log_contract(packet, offset);
+		}
+		else{
+			summary = log_warehouse_request(packet, offset);
+		}
+		return summary;
+	}
+
+	function log_response_factory(summary){
+		return function(answer){
+			var extra = '';
+			if(answer.error){
+				extra = 'ERROR: ' + answer.error;
+			}
+			else{
+				extra = summary;
+			}
+			console.log('-------------------------------------------');
+			console.log('ANSWER');
+			console.log(extra);
+			console.log('-------------------------------------------');
+			console.dir(answer.results);
+			console.log('-------------------------------------------');	
+		}
+	}
+
 	var run_socket = disconnected_handler;
 
   socket.on('connect', function(){
@@ -7643,10 +7710,10 @@ module.exports = function(config){
   			body:req.body
   		}
 
+  		var log_response = null;
+
   		if($digger.config.debug){
-  			console.log('-------------------------------------------');
-  			console.log('request: ' + req.method + ' ' + req.url);
-  			console.dir(http_req);
+  			log_response = log_response_factory(log_request(req));
   		}
 
   		socket.emit('request', http_req, function(answer){
@@ -7659,13 +7726,11 @@ module.exports = function(config){
   			var error = answer.error;
   			var results = answer.results;
 
-  			if($digger.config.debug){
-  				console.log('-------------------------------------------');
-  				console.log('error:' + error);
-  				console.dir(results);
-  			}
-
   			reply(error, results);
+
+  			if($digger.config.debug){
+  				log_response(answer);
+  			}
   		})
   	}
 
@@ -7704,9 +7769,26 @@ module.exports = function(config){
 	$digger.blueprint = Blueprint();
 	$digger.template = Template();
 
+	/*
+	
+		we have been given some blueprints to automatically load
+		
+	*/
+	if(config.blueprints){
+		setTimeout(function(){
+			var blueprintwarehouse = $digger.connect(config.blueprints);
+			blueprintwarehouse('*')
+				.ship(function(blueprints){
+					blueprints.find('blueprint').each(function(blueprint){
+	          $digger.blueprint.add(blueprint);
+	        })
+				})
+		})
+	}
+	
 	return $digger;
 }
-},{"./blueprints":28,"./templates":30,"digger-client":26,"socket.io-client":27}],30:[function(require,module,exports){
+},{"./blueprints":28,"./templates":31,"digger-client":26,"socket.io-client":27}],31:[function(require,module,exports){
 /*
 
 	(The MIT License)
@@ -7744,7 +7826,7 @@ module.exports = function(){
 	  }
 	}
 }
-},{}],31:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 var process=require("__browserify_process");if (!process.EventEmitter) process.EventEmitter = function () {};
 
 var EventEmitter = exports.EventEmitter = process.EventEmitter;
@@ -7940,7 +8022,7 @@ EventEmitter.listenerCount = function(emitter, type) {
   return ret;
 };
 
-},{"__browserify_process":33}],32:[function(require,module,exports){
+},{"__browserify_process":34}],33:[function(require,module,exports){
 var events = require('events');
 
 exports.isArray = isArray;
@@ -8287,7 +8369,7 @@ exports.format = function(f) {
   return str;
 };
 
-},{"events":31}],33:[function(require,module,exports){
+},{"events":32}],34:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -8341,7 +8423,5 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
-},{}],"digger-sockets":[function(require,module,exports){
-module.exports=require('E9YBgr');
 },{}]},{},[])
 ;

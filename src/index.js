@@ -283,7 +283,7 @@ module.exports = function(options){
 
 			it is just an express app and so can be mounted onto webservers
 		*/
-		digger_application:function(){
+		digger_application:function(config){
 
 			// create a sub express application to make the routing easy
 			var diggerapp = express();
@@ -293,16 +293,21 @@ module.exports = function(options){
 		    code injection for the client
 		    
 		  */
-		  diggerapp.get('/digger.js', Injector());
+		  diggerapp.get('/digger.js', Injector({
+        appconfig:config
+      }));
 		  diggerapp.get('/digger.min.js', Injector({
-		    minified:true
+		    minified:true,
+        appconfig:config
 		  }));
 		  diggerapp.get('/:driver/digger.js', Injector({
-		    pathdriver:true
+		    pathdriver:true,
+        appconfig:config
 		  }));
 		  diggerapp.get('/:driver/digger.min.js', Injector({
 		    pathdriver:true,
-		    minified:true
+		    minified:true,
+        appconfig:config
 		  }));
 
 		  /*
