@@ -115,6 +115,7 @@ module.exports = function(options){
   			headers:req.headers,
   			body:req.body
   		}, function(error, result){
+
   			if(error){
   				reply(error);
   				return;
