@@ -1101,7 +1101,7 @@ Container.prototype.summary = function(options){
 Container.prototype.toString = function(){
   return this.summary();
 }
-},{"digger-utils":3,"dotty":4,"events":32,"util":33}],7:[function(require,module,exports){
+},{"digger-utils":3,"dotty":4,"events":35,"util":36}],7:[function(require,module,exports){
 /*
 
   (The MIT License)
@@ -3334,7 +3334,7 @@ Container.prototype.summary = function(options){
 Container.prototype.toString = function(){
   return this.summary();
 }
-},{"digger-utils":24,"dotty":19,"events":32,"util":33}],22:[function(require,module,exports){
+},{"digger-utils":24,"dotty":19,"events":35,"util":36}],22:[function(require,module,exports){
 module.exports=require(1)
 },{}],23:[function(require,module,exports){
 module.exports=require(2)
@@ -3570,7 +3570,7 @@ SupplyChain.prototype.merge = function(contracts){
 SupplyChain.prototype.pipe = function(contracts){
   return this.contract_group('pipe', contracts);
 }
-},{"__browserify_process":34,"digger-container":20,"digger-utils":24,"events":32,"util":33}],26:[function(require,module,exports){
+},{"__browserify_process":37,"digger-container":20,"digger-utils":24,"events":35,"util":36}],26:[function(require,module,exports){
 /*
 
   (The MIT License)
@@ -3614,6 +3614,12 @@ module.exports = function(handle){
 
 module.exports.Container = Container;
 },{"digger-container":5,"digger-contracts":11,"digger-find":17,"digger-supplychain":25}],27:[function(require,module,exports){
+module.exports=require(1)
+},{}],28:[function(require,module,exports){
+module.exports=require(2)
+},{}],29:[function(require,module,exports){
+module.exports=require(10)
+},{"extend":27,"hat":28}],30:[function(require,module,exports){
 /*! Socket.IO.js build:0.9.16, development. Copyright(c) 2011 LearnBoost <dev@learnboost.com> MIT Licensed */
 
 var io = ('undefined' === typeof module ? {} : module.exports);
@@ -7487,7 +7493,7 @@ if (typeof define === "function" && define.amd) {
   define([], function () { return io; });
 }
 })();
-},{}],28:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 /*
 
 	(The MIT License)
@@ -7587,6 +7593,7 @@ module.exports=require('E9YBgr');
  * Module dependencies.
  */
 
+var utils = require('digger-utils');
 var Client = require('digger-client');
 var Sockets = require('socket.io-client');
 
@@ -7700,10 +7707,13 @@ module.exports = function(config){
 	var run_socket = disconnected_handler;
 
   socket.on('connect', function(){
+
+  	var callbacks = {};
   	
   	run_socket = function(req, reply){
   		
   		var http_req = {
+  			id:utils.littleid(),
   			method:req.method,
   			url:req.url,
   			headers:req.headers,
@@ -7716,7 +7726,7 @@ module.exports = function(config){
   			log_response = log_response_factory(log_request(req));
   		}
 
-  		socket.emit('request', http_req, function(answer){
+  		callbacks[http_req.id] = function(answer){
 
   			/*
   			
@@ -7731,8 +7741,22 @@ module.exports = function(config){
   			if($digger.config.debug){
   				log_response(answer);
   			}
-  		})
+
+  			delete(callbacks[http_req.id]);
+  		}
+
+  		socket.emit('request', http_req)
   	}
+
+  	socket.on('response', function(answer){
+
+  		var id = answer.id;
+
+  		var callback = callbacks[id];
+  		if(callback){
+  			callback(answer);
+  		}
+  	})
 
   	request_buffer.forEach(function(buffered_request){
   		run_socket(buffered_request.req, buffered_request.reply);
@@ -7773,7 +7797,7 @@ module.exports = function(config){
 	
 		we have been given some blueprints to automatically load
 		
-	*/
+	
 	if(config.blueprints){
 		setTimeout(function(){
 			var blueprintwarehouse = $digger.connect(config.blueprints);
@@ -7785,10 +7809,10 @@ module.exports = function(config){
 				})
 		})
 	}
-	
+	*/
 	return $digger;
 }
-},{"./blueprints":28,"./templates":31,"digger-client":26,"socket.io-client":27}],31:[function(require,module,exports){
+},{"./blueprints":31,"./templates":34,"digger-client":26,"digger-utils":29,"socket.io-client":30}],34:[function(require,module,exports){
 /*
 
 	(The MIT License)
@@ -7826,7 +7850,7 @@ module.exports = function(){
 	  }
 	}
 }
-},{}],32:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 var process=require("__browserify_process");if (!process.EventEmitter) process.EventEmitter = function () {};
 
 var EventEmitter = exports.EventEmitter = process.EventEmitter;
@@ -8022,7 +8046,7 @@ EventEmitter.listenerCount = function(emitter, type) {
   return ret;
 };
 
-},{"__browserify_process":34}],33:[function(require,module,exports){
+},{"__browserify_process":37}],36:[function(require,module,exports){
 var events = require('events');
 
 exports.isArray = isArray;
@@ -8369,7 +8393,7 @@ exports.format = function(f) {
   return str;
 };
 
-},{"events":32}],34:[function(require,module,exports){
+},{"events":35}],37:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};

@@ -18,13 +18,14 @@
 
 var http = require('http');
 var express = require('express');
+var vhost = require('express-vhost');
+var path = require('path');
+var ErrorHandler = require('./errorhandler');
+
 var RedisStore = require('connect-redis')(express);
 var sockets = require('socket.io');
-var path = require('path');
-
 var Injector = require('./injector');
-var ErrorHandler = require('./errorhandler');
-var vhost = require('express-vhost');
+var EventEmitter = require('events').EventEmitter;
 
 module.exports = function(options){
 
@@ -38,6 +39,7 @@ module.exports = function(options){
 
 	var app = express();
 	var server = http.createServer(app);
+	
 	var io = sockets.listen(server);	
 
 	io.enable('browser client minification');  // send minified client
@@ -72,8 +74,8 @@ module.exports = function(options){
 	
 		the socket connects and we extract the session data so we get
 		access to the user from a socket request
-		
-	*/
+		*/
+	
 	function authFunction(data, accept){
     if (data && data.headers && data.headers.cookie) {
       cookieParser(data, {}, function(err){
@@ -105,28 +107,19 @@ module.exports = function(options){
 
   	all of the requests travel via here
 
-  */
-  function connector(){
-  	return function(req, reply){
+ 	*/
+  
+	function connector(req, reply){
 
-  		app.emit('digger:request', {
-  			url:req.url,
-  			method:req.method,
-  			headers:req.headers,
-  			body:req.body
-  		}, function(error, result){
+		app.emit('digger:request', {
+			id:req.id,
+			url:req.url,
+			method:req.method,
+			headers:req.headers,
+			body:req.body
+		}, reply)
 
-  			if(error){
-  				reply(error);
-  				return;
-  			}
-  			else{
-  				reply(null, result);
-  			}
-  		})
-  	}
-  }
-
+	} 
 
 	/*
 	
@@ -135,56 +128,61 @@ module.exports = function(options){
 		we proxy digger requests back to the reception socket handler
 		
 	*/
-	function socket_connector(){
+	
+	function socket_connector(socket){
 
-    var supplychain = connector();
+    var session = socket.handshake.session || {};
+    var auth = session.auth || {};
+    var user = auth.user;
 
-    return function (socket) {
+    socket.on('request', function(req){
 
-      var session = socket.handshake.session || {};
-      var auth = session.auth || {};
-      var user = auth.user;
+      var id = req.id;
+      var method = req.method;
 
-      /*
+      var headers = req.headers || {};
+      headers['x-json-user'] = user;
       
-        these are the browser socket methods travelling via our reception connector
-        
-      */
-      socket.on('request', function(req, reply){
-        var headers = req.headers || {};
-        headers['x-json-user'] = user;
-        /*
-        
-          it is important to map the request here to prevent properties being injected from outside
-          
-        */
-        supplychain({
-          method:req.method,
-          url:req.url,
-          headers:headers,
-          body:req.body
-        }, function(error, results){
-          reply({
-            error:error,
-            results:results
-          })
+     	connector({
+      	id:id,
+        method:method,
+        url:req.url,
+        headers:headers,
+        body:req.body
+      }, function(error, results){
+
+        socket.emit('response', {
+          id:id,
+          error:error,
+          results:results
         })
+
       })
+
+    });
+
+    socket.on('disconnect', function(){
+      session = null;
+      auth = null;
+      user = null;
+      request_handler = null;
+    })
       
-    }
   }
 
 
   /*
   
   	direct proxy through to the reception server
-  	
-  */
+
+	 */
+  
   function http_connector(){
 
-  	var supplychain = connector();
+  	var supplychain = connector;
 
   	return function(req, res){
+
   		var auth = req.session.auth || {};
       var user = auth.user;
 
@@ -223,7 +221,7 @@ module.exports = function(options){
 	        res.json(result || []);
 	      }
 	    })
-
+    
   	}
 
   }
@@ -231,30 +229,19 @@ module.exports = function(options){
   /*
 		  
   	the socket connector - this is for all applications running
-  	
-  */
+	*/  	
+  
 	io.set('authorization', authFunction);
-  io.sockets.on('connection', socket_connector());
+  io.sockets.on('connection', socket_connector);
 
   /*
   
   	this is when we mount an app without any domains
   	
   */
-  var singleapp = null;
   app.use(vhost.vhost());
-  app.use(function(req, res, next){
-  	if(singleapp){
-  		singleapp(req, res, next);
-  	}
-  	else{
-  		next();
-  	}
-  })
   app.use('/__digger/assets', express.static(path.normalize(__dirname + '/../assets')));
   app.use(ErrorHandler());
-  
-
 
 	return {
 		app:app,
@@ -268,14 +255,9 @@ module.exports = function(options){
 			
 		*/
 		add_website:function(domains, application){
-			if(arguments.length<=1){
-				singleapp = application;
-			}
-			else{
-				domains.forEach(function(domain){
-					vhost.register(domain, application);
-				})
-			}
+			domains.forEach(function(domain){
+				vhost.register(domain, application);
+			})
 		},
 
 		/*
@@ -286,14 +268,8 @@ module.exports = function(options){
 		*/
 		digger_application:function(config){
 
-			// create a sub express application to make the routing easy
 			var diggerapp = express();
 
-		  /*
-  
-		    code injection for the client
-		    
-		  */
 		  diggerapp.get('/digger.js', Injector({
         appconfig:config
       }));
@@ -311,11 +287,7 @@ module.exports = function(options){
         appconfig:config
 		  }));
 
-		  /*
-		  
-		  	pass all other requests through to the reception api
-		  	
-		  */
+
 		  diggerapp.use(http_connector());
 
 		  return diggerapp;
