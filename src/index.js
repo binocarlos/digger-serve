@@ -111,8 +111,6 @@ module.exports = function(options){
   
 	function connector(req, reply){
 
-		reply(null, []);
-		return;
 		app.emit('digger:request', {
 			id:req.id,
 			url:req.url,
