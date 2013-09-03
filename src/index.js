@@ -111,6 +111,8 @@ module.exports = function(options){
   
 	function connector(req, reply){
 
+		reply(null, []);
+		return;
 		app.emit('digger:request', {
 			id:req.id,
 			url:req.url,
@@ -129,45 +131,52 @@ module.exports = function(options){
 		
 	*/
 	
-	function socket_connector(socket){
+	function socket_connector(){
 
-    var session = socket.handshake.session || {};
-    var auth = session.auth || {};
-    var user = auth.user;
+		return function(socket){
 
-    socket.on('request', function(req){
+	    var session = socket.handshake.session || {};
+	    var auth = session.auth || {};
+	    var user = auth.user;
+	    var request_handler = function(req){
 
-      var id = req.id;
-      var method = req.method;
+	      var id = req.id;
+	      var method = req.method;
 
-      var headers = req.headers || {};
-      headers['x-json-user'] = user;
-      
-     	connector({
-      	id:id,
-        method:method,
-        url:req.url,
-        headers:headers,
-        body:req.body
-      }, function(error, results){
+	      var headers = req.headers || {};
+	      headers['x-json-user'] = user;
+	      
+	     	connector({
+	      	id:id,
+	        method:method,
+	        url:req.url,
+	        headers:headers,
+	        body:req.body
+	      }, function(error, results){
 
-        socket.emit('response', {
-          id:id,
-          error:error,
-          results:results
-        })
+	        socket.emit('response', {
+	          id:id,
+	          error:error,
+	          results:results
+	        })
 
-      })
+	      })
 
-    });
+	    }
 
-    socket.on('disconnect', function(){
-      session = null;
-      auth = null;
-      user = null;
-      request_handler = null;
-    })
-      
+	    socket.on('request', request_handler);
+
+	    socket.on('disconnect', function(){
+	    	console.log('-------------------------------------------');
+	    	console.log('socket disconnecting');
+	      session = null;
+	      auth = null;
+	      user = null;
+	      request_handler = null;
+	    })
+
+	  }
+	      
   }
 
 
@@ -232,7 +241,7 @@ module.exports = function(options){
 	*/  	
   
 	io.set('authorization', authFunction);
-  io.sockets.on('connection', socket_connector);
+  io.sockets.on('connection', socket_connector());
 
   /*
   
