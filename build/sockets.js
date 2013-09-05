@@ -745,7 +745,9 @@ Container.prototype.descendents = function(){
 Container.prototype.containers = function(){
   var self = this;
   return this.models.map(function(model){
-    return self.spawn([model]);
+    var ret = self.spawn([model]);
+    ret['$$hashKey'] = model._digger.diggerid;
+    return ret;
   })
 }
 
@@ -1092,7 +1094,8 @@ Container.prototype.summary = function(options){
     })
   }
 
-  parts.unshift(this.diggerid().substr(0,6));
+  // have each summary unique
+  parts.push('=' + this.diggerid().substr(0,6) + '...');
 
   return parts.join('');
 }
@@ -1100,7 +1103,7 @@ Container.prototype.summary = function(options){
 Container.prototype.toString = function(){
   return this.summary();
 }
-},{"digger-utils":3,"dotty":4,"events":35,"util":36}],7:[function(require,module,exports){
+},{"digger-utils":3,"dotty":4,"events":34,"util":35}],7:[function(require,module,exports){
 /*
 
   (The MIT License)
@@ -3004,7 +3007,7 @@ Container.prototype.summary = function(options){
 Container.prototype.toString = function(){
   return this.summary();
 }
-},{"digger-utils":21,"dotty":16,"events":35,"util":36}],19:[function(require,module,exports){
+},{"digger-utils":21,"dotty":16,"events":34,"util":35}],19:[function(require,module,exports){
 module.exports=require(1)
 },{}],20:[function(require,module,exports){
 module.exports=require(2)
@@ -3240,7 +3243,7 @@ SupplyChain.prototype.merge = function(contracts){
 SupplyChain.prototype.pipe = function(contracts){
   return this.contract_group('pipe', contracts);
 }
-},{"__browserify_process":37,"digger-container":17,"digger-utils":21,"events":35,"util":36}],23:[function(require,module,exports){
+},{"__browserify_process":36,"digger-container":17,"digger-utils":21,"events":34,"util":35}],23:[function(require,module,exports){
 module.exports=require(1)
 },{}],24:[function(require,module,exports){
 module.exports=require(2)
@@ -7378,8 +7381,6 @@ module.exports = function(){
 	  }
 	}
 }
-},{}],"digger-sockets":[function(require,module,exports){
-module.exports=require('E9YBgr');
 },{}],"E9YBgr":[function(require,module,exports){
 /*
 
@@ -7618,7 +7619,7 @@ module.exports = function(config){
 	*/
 	return $digger;
 }
-},{"./blueprints":31,"./templates":34,"digger-client":26,"digger-utils":29,"socket.io-client":30}],34:[function(require,module,exports){
+},{"./blueprints":31,"./templates":33,"digger-client":26,"digger-utils":29,"socket.io-client":30}],33:[function(require,module,exports){
 /*
 
 	(The MIT License)
@@ -7656,7 +7657,7 @@ module.exports = function(){
 	  }
 	}
 }
-},{}],35:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 var process=require("__browserify_process");if (!process.EventEmitter) process.EventEmitter = function () {};
 
 var EventEmitter = exports.EventEmitter = process.EventEmitter;
@@ -7852,7 +7853,7 @@ EventEmitter.listenerCount = function(emitter, type) {
   return ret;
 };
 
-},{"__browserify_process":37}],36:[function(require,module,exports){
+},{"__browserify_process":36}],35:[function(require,module,exports){
 var events = require('events');
 
 exports.isArray = isArray;
@@ -8199,7 +8200,7 @@ exports.format = function(f) {
   return str;
 };
 
-},{"events":35}],37:[function(require,module,exports){
+},{"events":34}],36:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -8253,5 +8254,7 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
+},{}],"digger-sockets":[function(require,module,exports){
+module.exports=require('E9YBgr');
 },{}]},{},[])
 ;

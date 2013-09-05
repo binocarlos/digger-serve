@@ -133,6 +133,7 @@ module.exports = function(options){
 
 		return function(socket){
 
+			var socketid = socket.id;
 	    var session = socket.handshake.session || {};
 	    var auth = session.auth || {};
 	    var user = auth.user;
@@ -167,11 +168,12 @@ module.exports = function(options){
 	    socket.on('disconnect', function(){
 	    	console.log('-------------------------------------------');
 	    	console.log('socket disconnecting');
-	      session = null;
-	      auth = null;
-	      user = null;
-	      request_handler = null;
-	    })
+	      delete session;
+	      delete auth;
+	      delete user;
+    		delete socket; 
+    		delete io.sockets.sockets[socketid];
+			})
 
 	  }
 	      
@@ -247,8 +249,8 @@ module.exports = function(options){
   	
   */
   app.use(vhost.vhost());
-  app.use('/__digger/assets', express.static(path.normalize(__dirname + '/../assets')));
-  app.use(ErrorHandler());
+  //app.use('/__digger/assets', express.static(path.normalize(__dirname + '/../assets')));
+  //app.use(ErrorHandler());
 
 	return {
 		app:app,
