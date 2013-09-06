@@ -907,6 +907,30 @@ Container.prototype.attr = wrapper();
 Container.prototype.digger = wrapper('_digger');
 Container.prototype.data = wrapper('_digger.data');
 
+// a symlink means we always replace
+// we add a symlink header which replaces this container with
+// another in the contract resolve chain
+Container.prototype.symlink = function(target, selector){
+  var links = this.digger('symlinks') || {};
+  var hasselector = arguments.length>1;
+
+  // target is a warehouse string
+  // selector is an optional selector
+  if(typeof(target)==='string'){
+    var url = target + (hasselector ? '/' + selector : '');
+    links[url] = 'symlink';
+  }
+  else{
+    target.each(function(t){
+      var url = t.diggerurl() + (hasselector ? '/' + selector : '');
+      links[url] = 'symlink';
+    })  
+  }
+  
+  this.digger('symlinks', links);
+  return this;
+}
+
 Container.prototype.diggerid = property_wrapper('_digger', 'diggerid');
 Container.prototype.diggerparentid = property_wrapper('_digger', 'diggerparentid');
 Container.prototype.diggerwarehouse = property_wrapper('_digger', 'diggerwarehouse');
@@ -922,7 +946,7 @@ Container.prototype.diggerpath = function(){
 }
 
 
-var branchwrapper = property_wrapper('_digger', 'diggerbranch');
+var headerwrapper = property_wrapper('_digger', 'diggerbranch');
 Container.prototype.diggerbranch = function(){
   var ret = branchwrapper.apply(this, utils.toArray(arguments));
 
@@ -1103,7 +1127,7 @@ Container.prototype.summary = function(options){
 Container.prototype.toString = function(){
   return this.summary();
 }
-},{"digger-utils":3,"dotty":4,"events":34,"util":35}],7:[function(require,module,exports){
+},{"digger-utils":3,"dotty":4,"events":35,"util":36}],7:[function(require,module,exports){
 /*
 
   (The MIT License)
@@ -2311,25 +2335,40 @@ function compile(selector){
     var model = container.get(0);
     var digger = model._digger;
 
+    // tells you if the given boolean should actuall be true
+    // this allows the :not modifier to negate searches
+    function notfilter(val){
+      if(!val){
+        val = false;
+      }
+      return selector.modifier && selector.modifier.not ? !val : val;
+    }
+
+    function notcountfilter(number){
+      var orig = number || 0;
+      var opposite = orig==0 ? 1 : 0;
+      return selector.modifier && selector.modifier.not ? opposite : orig;
+    }
+
     // we step through one at a time - as soon as something fails we do not match
 
     // if we have a wildcard then we pass
     if(selector.tag=='*'){
-      return true;
+      return notfilter(true);
     }
 
     // #id
-    if(selector.id && digger.id!=selector.id){      
+    if(selector.id && notfilter(digger.id!=selector.id)){
       return false;
     }
 
     // =diggerid
-    if(selector.diggerid && digger.diggerid!=selector.diggerid){
+    if(selector.diggerid && notfilter(digger.diggerid!=selector.diggerid)){
       return false;
     }
 
     // tagname
-    if(selector.tag && digger.tag!=selector.tag){
+    if(selector.tag && notfilter(digger.tag!=selector.tag)){
       return false;
     }
   
@@ -2338,7 +2377,7 @@ function compile(selector){
       var keys = Object.keys(selector.class || {});
       var classcount = 0;
       keys.forEach(function(c){
-        classcount += container.hasClass(c) ? 1 : 0;
+        classcount += container.hasClass(c) ? notcountfilter(1) : notcountfilter(0);
       })
       if(classcount<keys.length){
         return false;
@@ -2356,11 +2395,11 @@ function compile(selector){
 
         // [size]
         if(!attr_filter.value){
-          attr_count += check_value !== null ? 1 : 0;
+          attr_count += check_value !== null ? notcountfilter(1) : notcountfilter(0);
         }
         // [size>100]
         else if(operator_function){
-          attr_count += operator_function.apply(null, [check_value, attr_filter.value]) ? 1 : 0;
+          attr_count += operator_function.apply(null, [check_value, attr_filter.value]) ? notcountfilter(1) : notcountfilter(0);
         }
         // no operator function found
       })
@@ -3007,7 +3046,7 @@ Container.prototype.summary = function(options){
 Container.prototype.toString = function(){
   return this.summary();
 }
-},{"digger-utils":21,"dotty":16,"events":34,"util":35}],19:[function(require,module,exports){
+},{"digger-utils":21,"dotty":16,"events":35,"util":36}],19:[function(require,module,exports){
 module.exports=require(1)
 },{}],20:[function(require,module,exports){
 module.exports=require(2)
@@ -3121,7 +3160,10 @@ SupplyChain.prototype.contract = function(req, container){
           if(!result){
             result = [];
           }
-          if(!utils.isArray(result)){
+          if(!utils.isArray(result) && typeof(result)==='object'){
+            if(result.headers){
+              result = result.body;
+            }
             result = [result];
           }
 
@@ -3243,7 +3285,7 @@ SupplyChain.prototype.merge = function(contracts){
 SupplyChain.prototype.pipe = function(contracts){
   return this.contract_group('pipe', contracts);
 }
-},{"__browserify_process":36,"digger-container":17,"digger-utils":21,"events":34,"util":35}],23:[function(require,module,exports){
+},{"__browserify_process":37,"digger-container":17,"digger-utils":21,"events":35,"util":36}],23:[function(require,module,exports){
 module.exports=require(1)
 },{}],24:[function(require,module,exports){
 module.exports=require(2)
@@ -7381,6 +7423,8 @@ module.exports = function(){
 	  }
 	}
 }
+},{}],"digger-sockets":[function(require,module,exports){
+module.exports=require('E9YBgr');
 },{}],"E9YBgr":[function(require,module,exports){
 /*
 
@@ -7619,7 +7663,7 @@ module.exports = function(config){
 	*/
 	return $digger;
 }
-},{"./blueprints":31,"./templates":33,"digger-client":26,"digger-utils":29,"socket.io-client":30}],33:[function(require,module,exports){
+},{"./blueprints":31,"./templates":34,"digger-client":26,"digger-utils":29,"socket.io-client":30}],34:[function(require,module,exports){
 /*
 
 	(The MIT License)
@@ -7643,10 +7687,8 @@ var templates = {};
 
 module.exports = function(){
 	return {
-		add:function(plates){
-	    for(var i in plates){
-	      templates[i] = plates[i];
-	    }
+		add:function(name, plate){
+			templates[name] = plate;
 	    return this;
 	  },
 	  get:function(name){
@@ -7657,7 +7699,7 @@ module.exports = function(){
 	  }
 	}
 }
-},{}],34:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 var process=require("__browserify_process");if (!process.EventEmitter) process.EventEmitter = function () {};
 
 var EventEmitter = exports.EventEmitter = process.EventEmitter;
@@ -7853,7 +7895,7 @@ EventEmitter.listenerCount = function(emitter, type) {
   return ret;
 };
 
-},{"__browserify_process":36}],35:[function(require,module,exports){
+},{"__browserify_process":37}],36:[function(require,module,exports){
 var events = require('events');
 
 exports.isArray = isArray;
@@ -8200,7 +8242,7 @@ exports.format = function(f) {
   return str;
 };
 
-},{"events":34}],36:[function(require,module,exports){
+},{"events":35}],37:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -8254,7 +8296,5 @@ process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');
 };
 
-},{}],"digger-sockets":[function(require,module,exports){
-module.exports=require('E9YBgr');
 },{}]},{},[])
 ;

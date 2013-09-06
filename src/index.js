@@ -31,15 +31,16 @@ module.exports = function(options){
 
 	options = options || {};
 
+	var app = express();
+	var server = http.createServer(app);
+
+
 	var redisStore = new RedisStore({
 		host:options.redis_host || process.env.DIGGER_REDIS_HOST || '127.0.0.1',
 		port:options.redis_port || process.env.DIGGER_REDIS_PORT || 6379,
 		pass:options.redis_pass || process.env.DIGGER_REDIS_PASSWORD || null
 	})
 
-	var app = express();
-	var server = http.createServer(app);
-	
 	var io = sockets.listen(server);	
 
 	io.enable('browser client minification');  // send minified client
@@ -74,7 +75,7 @@ module.exports = function(options){
 	
 		the socket connects and we extract the session data so we get
 		access to the user from a socket request
-		*/
+	*/
 	
 	function authFunction(data, accept){
     if (data && data.headers && data.headers.cookie) {
@@ -106,8 +107,8 @@ module.exports = function(options){
   	functional connector to the reception server
 
   	all of the requests travel via here
-
- 	*/
+	*/
+ 	
   
 	function connector(req, reply){
 
@@ -119,15 +120,15 @@ module.exports = function(options){
 			body:req.body
 		}, reply)
 
-	} 
+	}
 
 	/*
 	
 		a client has connected their socket to the web app
 
 		we proxy digger requests back to the reception socket handler
-		
-	*/
+	*/	
+	
 	
 	function socket_connector(){
 
@@ -183,8 +184,7 @@ module.exports = function(options){
   /*
   
   	direct proxy through to the reception server
-
-	 */
+	*/
   
   function http_connector(){
 
@@ -234,11 +234,12 @@ module.exports = function(options){
   	}
 
   }
+	 
 
   /*
 		  
   	the socket connector - this is for all applications running
-	*/  	
+	*/	
   
 	io.set('authorization', authFunction);
   io.sockets.on('connection', socket_connector());
@@ -247,10 +248,10 @@ module.exports = function(options){
   
   	this is when we mount an app without any domains
   	
-  */
-  app.use(vhost.vhost());
-  //app.use('/__digger/assets', express.static(path.normalize(__dirname + '/../assets')));
-  //app.use(ErrorHandler());
+ */
+  app.use(vhost.vhost()); 
+  app.use('/__digger/assets', express.static(path.normalize(__dirname + '/../assets')));
+  app.use(ErrorHandler());
 
 	return {
 		app:app,
@@ -264,6 +265,9 @@ module.exports = function(options){
 			
 		*/
 		add_website:function(domains, application){
+			if(typeof(domains)==='string'){
+	      domains = [domains];
+	    }
 			domains.forEach(function(domain){
 				vhost.register(domain, application);
 			})
