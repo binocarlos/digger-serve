@@ -917,19 +917,63 @@ Container.prototype.symlink = function(target, selector){
   // target is a warehouse string
   // selector is an optional selector
   if(typeof(target)==='string'){
-    var url = target + (hasselector ? '/' + selector : '');
-    links[url] = 'symlink';
+    links['symlink:' + target + (selector ? '/' + selector : '')] = {
+      type:'symlink',
+      warehouse:target,
+      selector:selector
+    }
   }
   else{
     target.each(function(t){
-      var url = t.diggerurl() + (hasselector ? '/' + selector : '');
-      links[url] = 'symlink';
+      links['symlink:' + t.diggerwarehouse() + '/' + t.diggerid() + (selector ? '/' + selector : '')] = {
+        type:'symlink',
+        warehouse:t.diggerwarehouse(),
+        diggerid:t.diggerid(),
+        selector:selector
+      }
     })  
   }
   
   this.digger('symlinks', links);
   return this;
 }
+
+function attrlink(listmode){
+  return function(field, target, selector){
+    var links = this.digger('symlinks') || {};
+    var hasselector = arguments.length>1;
+
+    // target is a warehouse string
+    // selector is an optional selector
+    if(typeof(target)==='string'){
+      links['attr:' + target + (selector ? '/' + selector : '') + ':' + field] = {
+        type:'attr',
+        field:field,
+        listmode:listmode,
+        warehouse:target,
+        selector:selector
+      }
+    }
+    else{
+      target.each(function(t){
+        links['attr:' + t.diggerwarehouse() + '/' + t.diggerid() + (selector ? '/' + selector : '') + ':' + field] = {
+          type:'attr',
+          field:field,
+          listmode:listmode,
+          warehouse:t.diggerwarehouse(),
+          diggerid:t.diggerid(),
+          selector:selector
+        }
+      })  
+    }
+    
+    this.digger('symlinks', links);
+    return this;
+  }
+}
+
+Container.prototype.attrlink = attrlink();
+Container.prototype.attrlistlink = attrlink(true);
 
 Container.prototype.diggerid = property_wrapper('_digger', 'diggerid');
 Container.prototype.diggerparentid = property_wrapper('_digger', 'diggerparentid');
@@ -1126,6 +1170,15 @@ Container.prototype.summary = function(options){
 
 Container.prototype.toString = function(){
   return this.summary();
+}
+
+// assumes the models are actually a flat list of what
+// could become a tree
+// we use the utils.combine_tree_results to do this
+// and return the spawned result
+Container.prototype.combine_tree = function(){
+  this.models = utils.combine_tree_results(this.models);
+  return this;
 }
 },{"digger-utils":3,"dotty":4,"events":35,"util":36}],7:[function(require,module,exports){
 /*
@@ -1810,7 +1863,6 @@ function select(selector_string, context_string){
 /*
 
   POST
-
   
 */
 function append(appendcontainer){
@@ -1901,6 +1953,19 @@ function save(){
       var savemodel = JSON.parse(JSON.stringify(model));
       delete(savemodel._children);
       delete(savemodel._digger.data);
+
+      // remove the linked attributes we don't want to save those
+      var links = container.digger('symlinks') || {};
+
+      for(var linkid in links){
+        var link = links[linkid];
+
+        if(link.type=='attr'){
+          delete(savemodel[link.field]);
+        }
+      }
+
+
       return {
         method:'put',
         headers:{
@@ -1951,6 +2016,337 @@ function remove(){
   return this.supplychain ? this.supplychain.contract(raw, self) : raw;
 }
 },{"digger-selector":7,"digger-utils":10}],12:[function(require,module,exports){
+/*
+
+  (The MIT License)
+
+  Copyright (C) 2005-2013 Kai Davenport
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+ */
+
+/*
+  Module dependencies.
+*/
+
+module.exports = parse;
+module.exports.mini = miniparse;
+
+/*
+  Quarry.io Selector
+  -------------------
+
+  Represents a CSS selector that will be passed off to selectors or perform in-memory search
+
+ */
+
+/***********************************************************************************
+ ***********************************************************************************
+  Here is the  data structure:
+
+  "selector": " > * product.onsale[price<100] > img caption.red, friend",
+  "phases":
+    [
+      [
+          {
+              "splitter": ">",
+              "tag": "*"
+          },
+          {
+              "splitter": "",
+              "tag": "product",
+              "classnames": {
+                  "onsale": true
+              },
+              "attr": [
+                  {
+                      "field": "price",
+                      "operator": "<",
+                      "value": "100"
+                  }
+              ]
+          },
+          {
+              "splitter": ">",
+              "tag": "img"
+          },
+          {
+              "splitter": "",
+              "tag": "caption",
+              "classnames": {
+                  "red": true
+              }
+          }
+      ],
+      [
+          {
+              "tag": "friend"
+          }
+      ]
+    ]
+
+ */
+
+/*
+  Regular Expressions for each chunk
+*/
+
+var chunkers = [
+  // the 'type' selector
+  {
+    name:'tag',
+    regexp:/^(\*|\w+)/,
+    mapper:function(val, map){
+      map.tag = val;
+    }
+  },
+  // the '.classname' selector
+  {
+    name:'class',
+    regexp:/^\.\w+/,
+    mapper:function(val, map){
+      map.class = map.class || {};
+      map.class[val.replace(/^\./, '')] = true;
+    }
+  },
+  // the '#id' selector
+  {
+    name:'id',
+    regexp:/^#\w+/,
+    mapper:function(val, map){
+      map.id = val.replace(/^#/, '');
+    }
+  },
+  // the '=diggerid' selector
+  {
+    name:'diggerid',
+    regexp:/^=[\w-]+/,
+    mapper:function(val, map){
+      map.diggerid = val.replace(/^=/, '');
+    }
+  },
+  // the ':modifier' selector
+  {
+    name:'modifier',
+    regexp:/^:\w+(\(.*?\))?/,
+    mapper:function(val, map){
+      map.modifier = map.modifier || {};
+      var parts = val.split('(');
+      var key = parts[0];
+      val = parts[1];
+
+      if(val){
+        val = val.replace(/\)$/, '');
+
+        if(val.match(/^[\d\.-]+$/)){
+          val = JSON.parse(val);
+        }
+
+      }
+      else{
+        val = true;
+      }
+
+      map.modifier[key.replace(/^:/, '')] = val;
+    }
+  },
+  // the '[attr<100]' selector
+  {
+    name:'attr',
+    regexp:/^\[.*?["']?.*?["']?\]/,
+    mapper:function(val, map){
+      map.attr = map.attr || [];
+      var match = val.match(/\[(.*?)([=><\^\|\*\~\$\!]+)["']?(.*?)["']?\]/);
+      if(match){
+        map.attr.push({
+          field:match[1],
+          operator:match[2],
+          value:match[3]
+        });
+      }
+      else {
+        map.attr.push({
+          field:val.replace(/^\[/, '').replace(/\]$/, '')
+        });
+      }
+    }
+  },
+  // the ' ' or ' > ' splitter
+  {
+    name:'splitter',
+    regexp:/^[ ,<>]+/,
+    mapper:function(val, map){
+      map.splitter = val.replace(/\s+/g, '');
+    }
+
+  }
+];
+
+
+/*
+  Parse selector string into flat array of chunks
+ 
+  Example in: product.onsale[price<100]
+ */
+function parseChunks(selector){
+
+  var lastMatch = null;
+  var workingString = selector ? selector : '';
+  var lastString = '';
+
+  // this is a flat array of type, string pairs
+  var chunks = [];
+
+  var matchNextChunk = function(){
+
+    lastMatch = null;
+
+    for(var i in chunkers){
+      var chunker = chunkers[i];
+
+      if(lastMatch = workingString.match(chunker.regexp)){
+
+        // merge the value into the chunker data
+        var data = {
+          value:lastMatch[0]
+        }
+        for(prop in chunker){
+          data[prop] = chunker[prop];
+        }
+        chunks.push(data);
+
+        workingString = workingString.replace(lastMatch[0], '');
+
+        return true;
+      }
+    }
+    
+    return false;
+
+  }
+  
+  // the main chunking loop happens here
+  while(matchNextChunk()){
+    
+    // this is the sanity check in case we match nothing
+    if(lastString==workingString){
+      break;
+    }
+  }
+
+  return chunks;
+}
+
+function new_selector(){
+  return {
+    class:{},
+    attr:[],
+    modifier:{}
+  }
+}
+
+/*
+
+  turns a selector string into an array of arrays (phases) of selector objects
+ 
+ */
+function parse(selector_string){
+
+  if(typeof(selector_string)!='string'){
+    return selector_string;
+  }
+
+  var chunks = parseChunks(selector_string);
+
+  var phases = [];
+  var currentPhase = [];
+  var currentSelector = new_selector();
+
+  var addCurrentPhase = function(){
+    if(currentPhase.length>0){
+      phases.push(currentPhase);
+    }
+    currentPhase = [];
+  }
+
+  var addCurrentSelector = function(){
+
+    if(Object.keys(currentSelector).length>0){
+      currentPhase.push(currentSelector);
+    }
+    currentSelector = new_selector();
+  }
+
+  var addChunkToSelector = function(chunk, selector){
+    
+    chunk.mapper.apply(null, [chunk.value, selector]);
+  }
+
+
+  chunks.forEach(function(chunk, index){
+
+    if(chunk.name=='splitter' && chunk.value.match(/,/)){
+      addCurrentSelector();
+      addCurrentPhase();
+    }
+    else{
+
+      if(chunk.name=='splitter' && index>0){
+        addCurrentSelector();
+      }
+
+      addChunkToSelector(chunk, currentSelector);
+
+    }
+  })
+
+  addCurrentSelector();
+  addCurrentPhase();
+
+  return {
+    string:selector_string,
+    phases:phases
+  }
+}
+
+function miniparse(selector_string){
+
+  if(typeof(selector_string)!=='string'){
+    return selector_string;
+  }
+  selector_string = selector_string || '';
+  var selector = {
+    class:{},
+    modifier:{}
+  }
+  selector_string = selector_string.replace(/_(\w+)/, function(match, id){
+    selector.id = id;
+    return '';
+  })
+  selector_string = selector_string.replace(/\.(\w+)/g, function(match, classname){
+    selector.class[classname] = true;
+    return '';
+  })
+  if(selector_string.match(/\d/)){
+    selector.diggerid = selector_string;
+  }
+  else{
+    selector.tag = selector_string;
+  }
+  return selector;
+}
+},{}],13:[function(require,module,exports){
+module.exports=require(1)
+},{}],14:[function(require,module,exports){
+module.exports=require(2)
+},{}],15:[function(require,module,exports){
+module.exports=require(3)
+},{"extend":13,"hat":14}],16:[function(require,module,exports){
 /*
 
 	(The MIT License)
@@ -2128,7 +2524,7 @@ function factory(searchfn){
 
   }
 }
-},{}],13:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 /*
 
 	(The MIT License)
@@ -2217,7 +2613,7 @@ module.exports = {
       the compiler looks after turning strings into selector objects
       
     */
-    if(!typeof(filterfn)=='function'){
+    if(typeof(filterfn)!='function'){
       if(typeof(filterfn)=='string'){
         filterfn = Selector(filterfn).phases[0][0];
       }
@@ -2242,7 +2638,7 @@ module.exports = {
     return results.count()>0;
   }
 }
-},{"./find":12,"./search":14,"digger-selector":15}],14:[function(require,module,exports){
+},{"./find":16,"./search":18,"digger-selector":12}],18:[function(require,module,exports){
 /*
 
 	(The MIT License)
@@ -2463,13 +2859,11 @@ function search(selector, context){
 
   return ret;
 }
-},{"digger-utils":25}],15:[function(require,module,exports){
-module.exports=require(7)
-},{}],16:[function(require,module,exports){
+},{"digger-utils":15}],19:[function(require,module,exports){
 module.exports=require(4)
-},{}],17:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 arguments[4][5][0].apply(exports,arguments)
-},{"./proto":18}],18:[function(require,module,exports){
+},{"./proto":21}],21:[function(require,module,exports){
 /*
 
   (The MIT License)
@@ -3046,13 +3440,13 @@ Container.prototype.summary = function(options){
 Container.prototype.toString = function(){
   return this.summary();
 }
-},{"digger-utils":21,"dotty":16,"events":35,"util":36}],19:[function(require,module,exports){
+},{"digger-utils":24,"dotty":19,"events":35,"util":36}],22:[function(require,module,exports){
 module.exports=require(1)
-},{}],20:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 module.exports=require(2)
-},{}],21:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 module.exports=require(3)
-},{"extend":19,"hat":20}],22:[function(require,module,exports){
+},{"extend":22,"hat":23}],25:[function(require,module,exports){
 var process=require("__browserify_process");/*
 
   (The MIT License)
@@ -3285,143 +3679,7 @@ SupplyChain.prototype.merge = function(contracts){
 SupplyChain.prototype.pipe = function(contracts){
   return this.contract_group('pipe', contracts);
 }
-},{"__browserify_process":37,"digger-container":17,"digger-utils":21,"events":35,"util":36}],23:[function(require,module,exports){
-module.exports=require(1)
-},{}],24:[function(require,module,exports){
-module.exports=require(2)
-},{}],25:[function(require,module,exports){
-/*
-
-	(The MIT License)
-
-	Copyright (C) 2005-2013 Kai Davenport
-
-	Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-	The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
- */
-
-/*
-  Module dependencies.
-*/
-
-var extend = require('extend');
-var hat = require('hat');
-var utils = module.exports = {};
-
-/**
- * generate a new global id
- */
-
-utils.diggerid = function(){
-  return hat();
-}
-
-utils.littleid = function(chars){
-
-  chars = chars || 6;
-
-  var pattern = '';
-
-  for(var i=0; i<chars; i++){
-    pattern += 'x';
-  }
-  
-  return pattern.replace(/[xy]/g, function(c) {
-    var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
-    return v.toString(16);
-  });
-}
-
-/*
-
-  tells you if a string is a digger id or not
-  
-*/
-utils.isdiggerid = function(id){
-  return (id && id.match(/^\w{32}$/)) ? true : false;
-}
-
-/**
- * takes a string and prepares it to be used in a RegExp itself
- */
-
-utils.escapeRegexp = function(search){
-  return search.replace(/([\!\$\(\)\*\+\.\/\:\=\?\[\\\]\^\{\|\}])/g, "\\$1");
-}
-
-/*
-
-  return a pure JS version of a HTTP request
-  
-*/
-utils.json_request = function(req){
-  return {
-    method:req.method.toLowerCase(),
-    url:req.url,
-    body:req.body,
-    headers:req.headers
-  }
-}
-
-/*
-
-  is arr actually an array
-  
-*/
-utils.isArray = function(arr){
-  return Object.prototype.toString.call(arr) == '[object Array]';
-}
-
-/*
-
-  return an array version of arguments
-  
-*/
-utils.toArray = function(args){
-  return Array.prototype.slice.call(args, 0);
-}
-
-/*
-
-  turn a digger url string into an object with:
-
-    * action (read | write)
-    * supplier_method (select | append | save | remove)
-    * diggerid (a digger context extracted from the url)
-    * selector (a single phase of selectors extracted from the url)
-  
-*/
-utils.parse_request = function(method, url){
-
-}
-
-/*
-
-  exports a user object but removing its private fields first
-  
-*/
-utils.export_user = function(user){
-  var ret = {};
-
-  for(var prop in user){
-    if(prop.charAt(0)!='_'){
-      ret[prop] = user[prop];
-    }
-  }
-
-  return ret;
-}
-
-/**
- * jQuery Deep extend
- */
-
-utils.extend = extend;
-},{"extend":23,"hat":24}],26:[function(require,module,exports){
+},{"__browserify_process":37,"digger-container":20,"digger-utils":24,"events":35,"util":36}],26:[function(require,module,exports){
 /*
 
   (The MIT License)
@@ -3464,7 +3722,7 @@ module.exports = function(handle){
 }
 
 module.exports.Container = Container;
-},{"digger-container":5,"digger-contracts":11,"digger-find":13,"digger-supplychain":22}],27:[function(require,module,exports){
+},{"digger-container":5,"digger-contracts":11,"digger-find":17,"digger-supplychain":25}],27:[function(require,module,exports){
 module.exports=require(1)
 },{}],28:[function(require,module,exports){
 module.exports=require(2)
@@ -7609,16 +7867,22 @@ module.exports = function(config){
   		}
   	})
 
-  	request_buffer.forEach(function(buffered_request){
-  		run_socket(buffered_request.req, buffered_request.reply);
-  	})
-
+  	var usebuffer = [].concat(request_buffer);
+  	setTimeout(function(){
+  		usebuffer.forEach(function(buffered_request){
+	  		run_socket(buffered_request.req, buffered_request.reply);
+	  	})	
+  	}, 10);
+  	
   	request_buffer = [];
   	
     //socket.on('event', function(data){});
     socket.on('disconnect', function(){
+    	$digger.emit('disconnect');
     	run_socket = disconnected_handler;
     });
+
+    $digger.emit('connect');
   });
 
 	/*
@@ -7683,19 +7947,18 @@ module.exports = function(config){
 	TEMPLATES
 	
 */
-var templates = {};
-
 module.exports = function(){
 	return {
+		templates:{},
 		add:function(name, plate){
-			templates[name] = plate;
+			this.templates[name] = plate.replace(/^\s+/, '').replace(/\s+$/);
 	    return this;
 	  },
 	  get:function(name){
 	    if(arguments.length<=0){
-	      return templates;
+	      return this.templates;
 	    }
-	    return templates[name];
+	    return this.templates[name];
 	  }
 	}
 }
