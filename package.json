@@ -21,8 +21,7 @@
   },
   "dependencies": {
     "digger-sockets": "0.0.1",
-    "socket.io": "~0.9.16",
-    "socket.io-client": "~0.9.16",
+    "socket.io": "~0.9.16",    
     "express": "~3.3.5",
     "connect-redis": "~1.4.5",
     "express-vhost": "~0.1.1",
