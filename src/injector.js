@@ -27,13 +27,9 @@ module.exports = function(options){
     var host = req.headers.host;
     var baseurl = req.originalUrl.replace(/\/digger\.js/, '');
 
-    if(options.pathdriver){
-      baseurl = baseurl.replace(/\/\w+$/, '');
-    }
-
     var full_baseurl = '//' + host + baseurl;
 
-  	var driver = req.params.driver || req.query.driver || 'sockets';
+  	var driver = 'sockets';
 
   	res.setHeader('content-type', 'application/javascript');
 

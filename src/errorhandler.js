@@ -20,56 +20,52 @@ var fs = require('fs');
 var path = require('path');
 var ejs = require('ejs');
 
+function get_error_config(req, res){
+
+	var pagetitle = 'Error';
+	var pagetext = 'There has been an unknown error.';
+	var pagedata = '';
+	if(res.statusCode===404){
+		if(req.headers['x-digger-app']){
+			pagetitle = 'Page not found';
+			pagetext = 'This website does not have a page at that pathname';
+			pagedata = req.url;
+		}
+		else{
+			pagetitle = 'Website not found';
+			pagetext = 'digger does not have a website at that URL';
+			pagedata = req.url;
+		}
+	}
+	else if(res.statusCode===500){
+		pagetext = 'There has been an application error';
+		pagedata = req.body;
+	}
+
+	return {
+		statusCode:res.statusCode,
+		pagetitle:pagetitle,
+		pagetext:pagetext,
+		pagedata:pagedata
+	}
+}
+
 module.exports = function(){
+
+	var fs = require('fs');
+	var template = fs.readFile(path.normalize(__dirname + '/../assets/error.ejs'))
 	/*
 	
 		the 404 handler
 		
 	*/
-
-	function get_error_config(req, res){
-
-		var pagetitle = 'Error';
-		var pagetext = 'There has been an unknown error.';
-		var pagedata = '';
-		if(res.statusCode===404){
-			if(req.headers['x-digger-app']){
-				pagetitle = 'Page not found';
-				pagetext = 'This website does not have a page at that pathname';
-				pagedata = req.url;
-			}
-			else{
-				pagetitle = 'Website not found';
-				pagetext = 'digger does not have a website at that URL';
-				pagedata = req.url;
-			}
-		}
-		else if(res.statusCode===500){
-			pagetext = 'There has been an application error';
-			pagedata = req.body;
-		}
-
-		return {
-			statusCode:res.statusCode,
-			pagetitle:pagetitle,
-			pagetext:pagetext,
-			pagedata:pagedata
-		}
-	}
-
 	return function(req, res, next){
 		
-		fs.readFile(path.normalize(__dirname + '/../assets/error.ejs'), 'utf8', function(error, template){
-			if(error){
-				res.statusCode = 500;
-				res.send(error);
-				return;
-			}
+		var config = get_error_config(req, res);
+		var output = ejs.render(template, config);
+		if(!res.statusCode){
 			res.statusCode = 404;
-			var config = get_error_config(req, res);
-			var output = ejs.render(template, config);
-			res.send(output);
-		})
-		
+		}
+		res.send(output);
 	}
 }
