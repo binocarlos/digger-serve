@@ -1,6 +1,6 @@
 {
   "name": "digger-serve",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "A www server for a digger web application",
   "main": "src/index.js",
   "scripts": {
@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "digger-sockets": "0.0.1",
-    "socket.io": "~0.9.16",    
+    "socket.io": "~0.9.16",
     "express": "~3.3.5",
     "connect-redis": "~1.4.5",
     "express-vhost": "~0.1.1",
