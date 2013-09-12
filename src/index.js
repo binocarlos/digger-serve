@@ -20,46 +20,61 @@ var http = require('http');
 var express = require('express');
 var vhost = require('express-vhost');
 var path = require('path');
-var ErrorHandler = require('./errorhandler');
+var EventEmitter = require('events').EventEmitter;
+var util = require('util');
+//var ErrorHandler = require('./errorhandler');
+//var sockets = require('socket.io');
+var sockjs = require('sockjs');
+var Injector = require('./injector');
 
 var RedisStore = require('connect-redis')(express);
-var sockets = require('socket.io');
-var Injector = require('./injector');
 var EventEmitter = require('events').EventEmitter;
 
+function DiggerServe(options){
+	var self = this;
 
-/*
+	this.options = options || {};
+	this.express = express;
+	this.app = express();
+	this.server = http.createServer(this.app);
 
-	the socket connects and we extract the session data so we get
-	access to the user from a socket request
-*/
-var _cookie = 'connect.sid';
-
-function authFunction(cookieParser, redisStore){
-	return function(data, accept){
-	  if (data && data.headers && data.headers.cookie) {
-	    cookieParser(data, {}, function(err){
-	      if(err){
-	        return accept('COOKIE_PARSE_ERROR');
-	      }
-	      var sessionId = data.signedCookies[_cookie];
-	      redisStore.get(sessionId, function(err, session){
-	        if(err || !session || !session.auth || !session.auth.loggedIn){
-	          //accept('NOT_LOGGED_IN', false);
-
-	          // not logged in but we still want a socket
-	          accept(null, true);
-	        }
-	        else{
-	          data.session = session;
-	          accept(null, true);
-	        }
-	      });
-	    });
-	  } else {
-	    return accept('MISSING_COOKIE', false);
-	  }
+	// our proxy the hell out of here
+	this.connector = function(req, res){
+		self.emit('digger:request', req, res);
 	}
+
+	this.radio = function(action, channel, body){
+		self.emit('digger:radio', action, channel, body);
+	}
+
+	this.sockets = null;
+	this.redisStore = null;
+
+	this.app.use(vhost.vhost()); 
+}
+
+util.inherits(DiggerServe, EventEmitter);
+
+DiggerServe.prototype.ensure_redis_store = function(){
+	if(this.redisStore){
+		return this.redisStore;
+	}
+	this.redisStore = new RedisStore({
+		host:this.options.redis_host || process.env.DIGGER_REDIS_HOST || '127.0.0.1',
+		port:this.options.redis_port || process.env.DIGGER_REDIS_PORT || 6379,
+		pass:this.options.redis_pass || process.env.DIGGER_REDIS_PASSWORD || null
+	})
+	return this.redisStore;
+}
+
+DiggerServe.prototype.ensure_sockets = function(){
+	if(this.sockets){
+		return this.sockets;
+	}
+	this.sockets = sockjs.createServer();
+	this.sockets.on('connection', this.socket_connector());
+	this.sockets.installHandlers(this.server, {prefix:'/digger/sockets'});
+	return this.sockets;
 }
 
 
@@ -68,7 +83,9 @@ function authFunction(cookieParser, redisStore){
 	direct proxy through to the reception server
 */
 
-function http_connector(connector){
+DiggerServe.prototype.http_connector = function(){
+
+	var self = this;
 
 	return function(req, res){
 
@@ -91,9 +108,9 @@ function http_connector(connector){
     	headers['x-json-user'] = user;
     }
 
-    connector({
+    self.connector({
       method:req.method.toLowerCase(),
-      url:req.url,
+      url:req.url.split('?')[0],
       query:req.query,
       headers:headers,
       body:req.body
@@ -126,10 +143,175 @@ function http_connector(connector){
 
 	we proxy digger requests back to the reception socket handler
 */
-function socket_connector(connector){
+DiggerServe.prototype.socket_connector = function(){
 
+	var self = this;
 	return function(socket){
 
+		socket.on('data', function(payload) {
+      
+      /*
+      
+      	this has to be a strict mapping of fields
+      	because things like internal give the request upgraded permissions
+      	
+      */
+      payload = JSON.parse(payload);
+
+      if(payload.type==='request'){
+
+      	var req = payload.data;
+
+      	self.connector({
+	      	id:req.id,
+	        method:req.method,
+	        url:req.url,
+	        query:req.query,
+	        headers:req.headers,
+	        body:req.body
+	      }, function(error, results){
+
+	        socket.write(JSON.stringify({
+	        	type:'response',
+	        	data:{
+	        		id:req.id,
+		          error:error,
+		          results:results	
+	        	}
+	        }))
+
+	        req = null;
+	        payload = null;
+     		})
+
+      }
+      else if(payload.type.indexOf('radio')==0){
+
+      	var req = payload.data;
+
+      	if(payload.type=='radio:talk'){
+      		self.radio('talk', req.channel, req.body);
+      	}
+      	else if(payload.type=='radio:listen'){
+      		self.radio('listen', req);
+      	}
+      	else if(payload.type=='radio:cancel'){
+      		self.radio('cancel', req);
+      	}
+
+      }
+      else{
+      	socket.write(JSON.stringify({
+        	type:'error',
+        	data:'unknown payload type: ' + payload.type
+        }))
+      }
+
+    })
+
+    socket.on('close', function(){
+    	socket = null;
+    })
+
+  }
+      
+}
+
+DiggerServe.prototype.listen = function(port, done){
+	this.server.listen(port, done);
+}
+
+/*
+
+	generate a single app that is configured as per the digger.yaml
+
+	the middleware is already built - our job is to create an express
+	application with a static file store + sessions ready for the middleware
+
+	middleware is an array: 
+
+	[{
+		route:"/mypath",
+		handler:fn
+	}]
+
+*/
+DiggerServe.prototype.digger_application = function(domains, document_root, middleware){
+
+	var self = this;
+
+	if(!domains || domains.length<=0){
+		console.error('error: you must specify some domains for the application');
+		process.exit(1);
+	}
+
+	var diggerapp = express();
+	
+	// we serve the website files first to avoid there being a redis session for every png
+	diggerapp.use(express.static(document_root));
+
+	// if we have any middleware then we want sessions and stuff
+	if(middleware.length>0){
+
+		this.ensure_redis_store();
+
+		var cookieParser = express.cookieParser(this.options.cookie_secret || 'rodneybatman');
+		diggerapp.configure(function(){
+		
+			diggerapp.use(express.query());
+			diggerapp.use(express.bodyParser());
+			diggerapp.use(cookieParser);
+			diggerapp.use(express.session({store: self.redisStore}));
+		
+		})
+
+		middleware.forEach(function(warez){
+			diggerapp.use(warez.route, warez.fn);
+		})
+
+	}
+	
+	if(typeof(domains)==='string'){
+    domains = [domains];
+  }
+	domains.forEach(function(domain){
+		console.log('   domain: ' + domain);
+		vhost.register(domain, diggerapp);
+	})
+
+	return diggerapp;
+}
+
+// generate a middleware connector for the JavaScript api
+DiggerServe.prototype.digger_middleware = function(config){
+	var self = this;
+	this.ensure_sockets();
+
+	var diggerapp = express();
+  diggerapp.get('/digger.js', Injector({
+    appconfig:config
+  }));
+  diggerapp.get('/digger.min.js', Injector({
+    minified:true,
+    appconfig:config
+  }));
+
+  diggerapp.use(this.http_connector());
+
+  return diggerapp;
+}
+
+// 
+module.exports = function(options){
+
+	return new DiggerServe(options);
+
+}
+
+
+
+
+/*
 		var socketid = socket.id;
     var session = socket.handshake.session || {};
     var auth = session.auth || {};
@@ -173,34 +355,48 @@ function socket_connector(connector){
   		socket = null;
   		request_handler = null;
 		})
+*/
 
-  }
-      
-}
+// old socket.io stuff - we replaced this with socksjs
 
-function Connector(app){
-	return function(req, reply){
+/*
 
-		app.emit('digger:request', req, reply);
+	the socket connects and we extract the session data so we get
+	access to the user from a socket request
 
+var _cookie = 'connect.sid';
+
+function authFunction(cookieParser, redisStore){
+	return function(data, accept){
+	  if (data && data.headers && data.headers.cookie) {
+	    cookieParser(data, {}, function(err){
+	      if(err){
+	        return accept('COOKIE_PARSE_ERROR');
+	      }
+	      var sessionId = data.signedCookies[_cookie];
+	      redisStore.get(sessionId, function(err, session){
+	        if(err || !session || !session.auth || !session.auth.loggedIn){
+	          //accept('NOT_LOGGED_IN', false);
+
+	          // not logged in but we still want a socket
+	          accept(null, true);
+	        }
+	        else{
+	          data.session = session;
+	          accept(null, true);
+	        }
+	      });
+	    });
+	  } else {
+	    return accept('MISSING_COOKIE', false);
+	  }
 	}
 }
+*/
 
-module.exports = function(options){
-
-	options = options || {};
-
-	var app = express();
-	var server = http.createServer(app);
-
-	var redisStore = new RedisStore({
-		host:options.redis_host || process.env.DIGGER_REDIS_HOST || '127.0.0.1',
-		port:options.redis_port || process.env.DIGGER_REDIS_PORT || 6379,
-		pass:options.redis_pass || process.env.DIGGER_REDIS_PASSWORD || null
-	})
+/*
 
 	var io = sockets.listen(server);
-
 	io.enable('browser client minification');  // send minified client
 	io.enable('browser client etag');          // apply etag caching logic based on version number
 	io.enable('browser client gzip');          // gzip the file
@@ -216,91 +412,16 @@ module.exports = function(options){
 	  , 'xhr-polling'
 	  , 'jsonp-polling'
 	]);
-
-	var cookieParser = express.cookieParser(options.cookie_secret || 'rodneybatman');
-	app.configure(function(){
-	
-		app.use(express.query());
-		app.use(express.bodyParser());
-		app.use(cookieParser);
-		app.use(express.session({store: redisStore}));
-	
-	});
-
-	
-
-	var connector = Connector(app);
+*/
 
 
-	 
+
 
   /*
 		  
   	the socket connector - this is for all applications running
-	*/	
+	
   
 	io.set('authorization', authFunction(cookieParser, redisStore));
   io.sockets.on('connection', socket_connector(connector));
-
-  /*
-  
-  	this is when we mount an app without any domains
-  	
- */
-  app.use(vhost.vhost()); 
-  app.use('/__digger/assets', express.static(path.normalize(__dirname + '/../assets')));
-  app.use(ErrorHandler());
-
-	return {
-		app:app,
-		express:express,
-		server:server,
-		io:io,
-
-		/*
-		
-			add a website to the vhost
-			
-		*/
-		add_website:function(domains, application){
-			if(typeof(domains)==='string'){
-	      domains = [domains];
-	    }
-			domains.forEach(function(domain){
-				vhost.register(domain, application);
-			})
-		},
-
-		/*
-		
-			generate a digger application that is all ready to go
-
-			it is just an express app and so can be mounted onto webservers
-		*/
-		digger_application:function(config){
-
-			var diggerapp = express();
-
-		  diggerapp.get('/digger.js', Injector({
-        appconfig:config
-      }));
-		  diggerapp.get('/digger.min.js', Injector({
-		    minified:true,
-        appconfig:config
-		  }));
-		  diggerapp.get('/:driver/digger.js', Injector({
-		    pathdriver:true,
-        appconfig:config
-		  }));
-		  diggerapp.get('/:driver/digger.min.js', Injector({
-		    pathdriver:true,
-		    minified:true,
-        appconfig:config
-		  }));
-
-		  diggerapp.use(http_connector(connector));
-
-		  return diggerapp;
-		}
-	}
-}
+  */	

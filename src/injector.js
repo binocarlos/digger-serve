@@ -19,6 +19,8 @@ var url = require('url');
 var fs = require('fs');
 var path = require('path');
 
+var socketjs_client = '//cdn.sockjs.org/sockjs-0.3.min.js';
+
 module.exports = function(options){
   options = options || {};
   var appconfig = options.appconfig || {};
@@ -33,7 +35,7 @@ module.exports = function(options){
 
   	res.setHeader('content-type', 'application/javascript');
 
-    var client_path = path.normalize(__dirname + '/../build/' + driver + (options.minified ? '.min' : '') + '.js');
+    var client_path = path.normalize(__dirname + '/../build/digger' + (options.minified ? '.min' : '') + '.js');
 
     var auth = req.session.auth || {};
     var user = null;
@@ -74,15 +76,14 @@ module.exports = function(options){
         }
 
         code += [
-          "window.$digger = window.$digger || (function($diggerconfig){",
-          " var useconfig = " + JSON.stringify(digger_config, null, 4) + ";",
-          " if($diggerconfig){",
-          "   for(var prop in window.$diggerconfig){",
-          "     useconfig[prop] = window.$diggerconfig[prop];",
-          "   }",
-          " }",
-          " return require('digger-" + driver + "')(useconfig);",
-          "})(window.$diggerconfig)"
+          "\n\n// ^^ end of Digger - config now\n\n",
+          "var useconfig = " + JSON.stringify(digger_config, null, 4) + ";",
+          "if($diggerconfig){",
+          "  for(var prop in window.$diggerconfig){",
+          "    useconfig[prop] = window.$diggerconfig[prop];",
+          "  }",
+          "}",
+          "window.$digger = require('digger-" + driver + "')(useconfig);"
         ].join("\n");
         res.send(code);
       }
