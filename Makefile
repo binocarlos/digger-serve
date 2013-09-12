@@ -13,12 +13,24 @@ test:
 		$(TESTS)
 
 browserify:
-	browserify -r digger-sockets > build/sockets.js
+	browserify -r digger-sockets > build/digger.browserify.js
 
 uglify: browserify
-	uglifyjs build/sockets.js > build/sockets.min.js
+	uglifyjs build/digger.browserify.js > build/digger.uglify.js
 
-build: uglify
+sockets: browserify uglify
+	cat assets/sockjs-client.min.js > build/digger.js
+	cat assets/sockjs-client.min.js > build/digger.min.js
+	echo "\n\n//^^^ Sockets - Digger\n\n" >> build/digger.js
+	echo "\n\n//^^^ Sockets - Digger\n\n" >> build/digger.min.js
+	cat build/digger.browserify.js >> build/digger.js
+	cat build/digger.uglify.js >> build/digger.min.js
+
+tidy:
+	rm build/digger.browserify.js
+	rm build/digger.uglify.js
+
+build: sockets tidy
 
 install:
 	npm install
