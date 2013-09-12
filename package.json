@@ -20,11 +20,11 @@
     "url": "https://github.com/binocarlos/digger-serve/issues"
   },
   "dependencies": {
-    "digger-sockets": "0.0.1",
-    "socket.io": "~0.9.16",
+    "digger-sockets": "~0.0.1",
     "express": "~3.3.5",
     "connect-redis": "~1.4.5",
     "express-vhost": "~0.1.1",
-    "ejs": "~0.8.4"
+    "ejs": "~0.8.4",
+    "sockjs": "~0.3.7"
   }
 }
