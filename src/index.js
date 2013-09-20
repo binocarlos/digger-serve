@@ -171,6 +171,10 @@ DiggerServe.prototype.socket_connector = function(){
 	        body:req.body
 	      }, function(error, results){
 
+	      	if(!socket){
+	      		return;
+	      	}
+	      	
 	        socket.write(JSON.stringify({
 	        	type:'response',
 	        	data:{
@@ -246,7 +250,7 @@ DiggerServe.prototype.digger_application = function(domains, document_root, midd
 	}
 
 	var diggerapp = express();
-	
+
 	// we serve the website files first to avoid there being a redis session for every png
 	diggerapp.use(express.static(document_root));
 
