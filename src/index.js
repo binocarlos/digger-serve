@@ -240,7 +240,7 @@ DiggerServe.prototype.listen = function(port, done){
 	}]
 
 */
-DiggerServe.prototype.digger_application = function(domains, document_root, middleware){
+DiggerServe.prototype.digger_application = function(domains){
 
 	var self = this;
 
@@ -251,30 +251,18 @@ DiggerServe.prototype.digger_application = function(domains, document_root, midd
 
 	var diggerapp = express();
 
-	// we serve the website files first to avoid there being a redis session for every png
-	diggerapp.use(express.static(document_root));
+	this.ensure_redis_store();
 
-	// if we have any middleware then we want sessions and stuff
-	if(middleware.length>0){
-
-		this.ensure_redis_store();
-
-		var cookieParser = express.cookieParser(this.options.cookie_secret || 'rodneybatman');
-		diggerapp.configure(function(){
-		
-			diggerapp.use(express.query());
-			diggerapp.use(express.bodyParser());
-			diggerapp.use(cookieParser);
-			diggerapp.use(express.session({store: self.redisStore}));
-		
-		})
-
-		middleware.forEach(function(warez){
-			diggerapp.use(warez.route, warez.fn);
-		})
-
-	}
+	var cookieParser = express.cookieParser(this.options.cookie_secret || 'rodneybatman');
+	diggerapp.configure(function(){
 	
+		diggerapp.use(express.query());
+		diggerapp.use(express.bodyParser());
+		diggerapp.use(cookieParser);
+		diggerapp.use(express.session({store: self.redisStore}));
+	
+	})
+
 	if(typeof(domains)==='string'){
     domains = [domains];
   }
@@ -287,7 +275,7 @@ DiggerServe.prototype.digger_application = function(domains, document_root, midd
 }
 
 // generate a middleware connector for the JavaScript api
-DiggerServe.prototype.digger_middleware = function(config){
+DiggerServe.prototype.digger_express = function(config){
 	var self = this;
 	this.ensure_sockets();
 
