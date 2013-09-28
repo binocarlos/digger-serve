@@ -148,6 +148,9 @@ DiggerServe.prototype.socket_connector = function(){
 	var self = this;
 	return function(socket){
 
+		// the local functions we have registered with the radio
+		var listeners = {};
+
 		socket.on('data', function(payload) {
       
       /*
@@ -189,18 +192,45 @@ DiggerServe.prototype.socket_connector = function(){
      		})
 
       }
-      else if(payload.type.indexOf('radio')==0){
+      else if(payload.type=='radio'){
 
       	var req = payload.data;
 
-      	if(payload.type=='radio:talk'){
-      		self.radio('talk', req.channel, req.body);
+      	if(req.action=='talk'){
+      		self.radio('talk', req.channel, req.payload);
       	}
-      	else if(payload.type=='radio:listen'){
-      		self.radio('listen', req);
+      	else if(req.action=='listen'){
+      		if(listeners[req.channel]){
+      			return;
+      		}
+
+      		console.log('-------------------------------------------');
+      		console.log('-------------------------------------------');
+      		console.log('-------------------------------------------');
+      		console.log('-------------------------------------------');
+      		console.log('LISTEN');
+      		console.dir(req.channel);
+
+
+      		var listener = listeners[req.channel] = function(channel, data){
+
+      			console.log('-------------------------------------------');
+      			console.log('socket callback: ' + channel);
+      			socket.write(JSON.stringify({
+		        	type:'radio',
+		        	data:{
+		        		channel:channel,
+		        		payload:data
+		        	}
+		        }))
+      		}
+
+      		self.radio('listen', req.channel, listener);
       	}
-      	else if(payload.type=='radio:cancel'){
-      		self.radio('cancel', req);
+      	else if(req.action=='cancel'){
+      		var listener = listeners[req.channel];
+      		self.radio('cancel', req.channel, listener);
+      		delete(listeners[req.channel]);
       	}
 
       }
@@ -215,6 +245,11 @@ DiggerServe.prototype.socket_connector = function(){
 
     socket.on('close', function(){
     	socket = null;
+    	for(var key in listeners){
+    		var listener = listeners[key];
+      	self.radio('cancel', key, listener);
+    	}
+    	listeners = null;
     })
 
   }
