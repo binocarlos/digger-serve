@@ -4483,6 +4483,9 @@ module.exports = function(config){
 
 		function send_packet(action, channel, payload){
 
+			console.log('-------------------------------------------');
+			console.log('-------------------------------------------');
+			console.dir(channel);
 			socket.send(JSON.stringify({
 				type:'radio',
 				data:{
