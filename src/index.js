@@ -204,18 +204,8 @@ DiggerServe.prototype.socket_connector = function(){
       			return;
       		}
 
-      		console.log('-------------------------------------------');
-      		console.log('-------------------------------------------');
-      		console.log('-------------------------------------------');
-      		console.log('-------------------------------------------');
-      		console.log('LISTEN');
-      		console.dir(req.channel);
-
-
       		var listener = listeners[req.channel] = function(channel, data){
 
-      			console.log('-------------------------------------------');
-      			console.log('socket callback: ' + channel);
       			socket.write(JSON.stringify({
 		        	type:'radio',
 		        	data:{
