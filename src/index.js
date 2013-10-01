@@ -22,7 +22,7 @@ var vhost = require('express-vhost');
 var path = require('path');
 var EventEmitter = require('events').EventEmitter;
 var util = require('util');
-//var ErrorHandler = require('./errorhandler');
+var ErrorHandler = require('./errorhandler');
 //var sockets = require('socket.io');
 var sockjs = require('sockjs');
 var Injector = require('./injector');
@@ -50,7 +50,21 @@ function DiggerServe(options){
 	this.sockets = null;
 	this.redisStore = null;
 
-	this.app.use(vhost.vhost()); 
+	this.app.use(vhost.vhost());
+
+	this.app.get('/__digger/assets/digger.png', function(req, res, next){
+		res.sendfile(path.normalize(__dirname + '/../assets/digger.png'));
+	})
+	this.app.use(function(req, res){
+		res.send([
+			'<table width=100% height=100%><tr><td align=center valign=middle>',
+			'<span style="font-family:Arial;">',
+			'<img src="/__digger/assets/digger.png" />',
+			'<h2>Page / Website not found</h2>',
+			'</span>',
+			'</td></tr></table>'
+		].join(''))
+	})
 }
 
 util.inherits(DiggerServe, EventEmitter);
@@ -269,7 +283,7 @@ DiggerServe.prototype.listen = function(port, done){
 	}]
 
 */
-DiggerServe.prototype.digger_application = function(domains){
+DiggerServe.prototype.digger_application = function(domains, configurefn){
 
 	var self = this;
 
@@ -283,15 +297,16 @@ DiggerServe.prototype.digger_application = function(domains){
 	this.ensure_redis_store();
 
 	var cookieParser = express.cookieParser(this.options.cookie_secret || 'rodneybatman');
-	diggerapp.configure(function(){
 	
-		diggerapp.use(express.query());
-		diggerapp.use(express.bodyParser());
-		diggerapp.use(cookieParser);
-		diggerapp.use(express.session({store: self.redisStore}));
-	
-	})
+	diggerapp.use(express.query());
+	diggerapp.use(express.bodyParser());
+	diggerapp.use(cookieParser);
+	diggerapp.use(express.session({store: self.redisStore}));
 
+	if(configurefn){
+		configurefn(diggerapp);
+	}
+	
 	if(typeof(domains)==='string'){
     domains = [domains];
   }

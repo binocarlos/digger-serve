@@ -85,6 +85,12 @@ module.exports = function(options){
           "}",
           "window.$digger = require('digger-" + driver + "')(useconfig);"
         ].join("\n");
+
+        var code_wrapper = [
+
+          code
+
+        ]
         res.send(code);
       }
     })
