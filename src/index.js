@@ -56,6 +56,7 @@ function DiggerServe(options){
 		res.sendfile(path.normalize(__dirname + '/../assets/digger.png'));
 	})
 	this.app.use(function(req, res){
+		res.statusCode = 404;
 		res.send([
 			'<table width=100% height=100%><tr><td align=center valign=middle>',
 			'<span style="font-family:Arial;">',
