@@ -1978,6 +1978,11 @@ function append(appendcontainer){
     throw new Error('there is nothing to append to');
   }
 
+  appendcontainer.recurse(function(a){
+    a.removeAttr('_digger.diggerwarehouse');
+    a.removeAttr('_digger.diggerpath');
+  })
+
   var appendmodels = appendcontainer.models;
   
   var appendto = this.eq(0);
@@ -2847,11 +2852,25 @@ function compile(selector){
       return selector.modifier && selector.modifier.not ? opposite : orig;
     }
 
+    var hits = 0;
+
     // we step through one at a time - as soon as something fails we do not match
 
     // if we have a wildcard then we pass
     if(selector.tag=='*'){
       return notfilter(true);
+    }
+
+    if(selector.id){
+      hits++;
+    }
+
+    if(selector.diggerid){
+      hits++;
+    }
+
+    if(selector.tag){
+      hits++;
     }
 
     // #id
@@ -2874,6 +2893,7 @@ function compile(selector){
       var keys = Object.keys(selector.class || {});
       var classcount = 0;
       keys.forEach(function(c){
+        hits++;
         classcount += container.hasClass(c) ? notcountfilter(1) : notcountfilter(0);
       })
       if(classcount<keys.length){
@@ -2886,7 +2906,7 @@ function compile(selector){
       var attr_count = 0;
 
       selector.attr.forEach(function(attr_filter){
-
+        hits++;
         var check_value = container.attr(attr_filter.field);
         var operator_function = attr_compare_functions[attr_filter.operator];
 
@@ -2906,8 +2926,8 @@ function compile(selector){
       }
     }
 
-    return true;
-      
+    // a 'they actually have nothing in the selector check'
+    return hits>0;
   }
 }
 
@@ -4107,9 +4127,18 @@ module.exports=require(10)
 	BLUEPRINTS
 	
 */
-var blueprints = {};
-
 module.exports = function(){
+
+	var blueprints = {};
+	var holder = null;
+
+	function ensure_holder(){
+		if(!holder){
+			holder = $digger.create();
+		}
+		return holder;
+	}
+
 	return {
 	  add:function(blueprint){
 	  	if(!blueprint.fields){
@@ -4121,9 +4150,37 @@ module.exports = function(){
 	  		}
 	  	}
 
+	  	ensure_holder();
+	  	holder.add(blueprint);
 	  	blueprints[blueprint.title()] = blueprint;
 	  	
 	    return this;
+	  },
+	  has_children:function(for_blueprint){
+	  	if(!for_blueprint || !for_blueprint.attr('leaf')){
+	  		return true;
+	  	}
+	  	else{
+	  		return false;
+	  	}
+	  },
+	  // get a container that holds the blueprints that can be added to the given blueprint
+	  get_children:function(for_blueprint){
+	  	ensure_holder();
+	  	if(!for_blueprint){
+	  		return holder;
+	  	}
+
+	  	if(for_blueprint.attr('leaf')){
+	  		return null;
+	  	}
+
+	  	if(for_blueprint.attr('children')){
+	  		return holder.find(for_blueprint.attr('children'));
+	  	}
+	  	else{
+	  		return holder;
+	  	}
 	  },
 	  get:function(name){
 	    if(arguments.length<=0){
@@ -4474,23 +4531,6 @@ module.exports = function(config){
 	$digger.user = config.user;
 	$digger.blueprint = Blueprint();
 	$digger.template = Template();
-
-
-  /*
-  
-    give each container it's own radio by wrapping the main one
-
-  */
-  $digger.radio = Radio();
-  
-  Client.Container.augment_prototype({
-    // return a radio object that is bound to the container
-    radio:function(){
-      var base = this.diggerwarehouse().replace(/^\//, '').replace(/\//g, '.') + '.' + (this.diggerpath() || []).join('.');
-      return connect_radio(Radio(base + '.'));
-    }
-  })
-
 
 	/*
 	
