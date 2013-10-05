@@ -1,0 +1,1 @@
+require('digger-min-for-angular');

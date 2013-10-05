@@ -17,14 +17,14 @@
  */
 var url = require('url');
 var fs = require('fs');
+var async = require('async');
 var path = require('path');
 
 var socketjs_client = '//cdn.sockjs.org/sockjs-0.3.min.js';
 
-module.exports = function(options){
-  options = options || {};
-  var appconfig = options.appconfig || {};
+module.exports = function(appconfig){
   return function(req, res, next){
+    var options = req.injector_options || {};
 
     var host = req.headers.host;
     var baseurl = req.originalUrl.replace(/\/digger\.js/, '');
@@ -36,7 +36,26 @@ module.exports = function(options){
   	res.setHeader('content-type', 'application/javascript');
 
     var client_path = path.normalize(__dirname + '/../build/digger' + (options.minified ? '.min' : '') + '.js');
+    var adaptor_path = null;
 
+     var files = {
+      client:function(next){
+        fs.readFile(client_path, 'utf8', next);
+      }
+    };
+
+    console.log('-------------------------------------------');
+    console.dir(options);
+
+    if(options.adaptor){
+      var adaptor = __dirname + '/../build/digger' + (options.adaptor ? '.' + options.adaptor : '') + (options.minified ? '.min' : '') + '.js';
+      adaptor_path = path.normalize(adaptor);
+      files.adaptor = function(next){
+        fs.readFile(adaptor_path, 'utf8', next); 
+      }
+    }
+
+    
     var auth = req.session.auth || {};
     var user = null;
 
@@ -50,44 +69,54 @@ module.exports = function(options){
       }
     }
 
-    fs.readFile(client_path, 'utf8', function(error, code){
+    async.parallel(files, function(error, filedata){
       if(error){
         res.statusCode = 500;
         res.send(error);
+        return;
       }
-      else{
 
-        /*
+      var code = filedata.client;
+      var adaptor = filedata.adaptor;
+
+      /*
         
-          this object is used to construct the window $digger object
-          configured to point back to here
-          
-        */
-        var digger_config = {
-          host:host,
-          baseurl:baseurl,
-          user:user
-        }
-
-        for(var prop in appconfig){
-          if(prop!='hq_endpoints'){
-            digger_config[prop] = appconfig[prop];  
-          }
-        }
-
-        code += [
-          "\n\n// ^^ end of Digger - config now\n\n",
-          "var useconfig = " + JSON.stringify(digger_config, null, 4) + ";",
-          "if($diggerconfig){",
-          "  for(var prop in window.$diggerconfig){",
-          "    useconfig[prop] = window.$diggerconfig[prop];",
-          "  }",
-          "}",
-          "window.$digger = require('digger-" + driver + "')(useconfig);"
-        ].join("\n");
-
-        res.send(code);
+        this object is used to construct the window $digger object
+        configured to point back to here
+        
+      */
+      var digger_config = {
+        host:host,
+        baseurl:baseurl,
+        user:user
       }
+
+      if(options.auto_connect){
+        digger_config.root_warehouse = options.auto_connect;
+      }
+
+      for(var prop in appconfig){
+        if(prop!='hq_endpoints'){
+          digger_config[prop] = appconfig[prop];  
+        }
+      }
+
+      code += [
+        "\n\n// ^^ end of Digger - config now\n\n",
+        "var useconfig = " + JSON.stringify(digger_config, null, 4) + ";",
+        "if(window.$diggerconfig){",
+        "  for(var prop in window.$diggerconfig){",
+        "    useconfig[prop] = window.$diggerconfig[prop];",
+        "  }",
+        "}",
+        "window.$digger = require('digger-" + driver + "')(useconfig);"
+      ].join("\n");
+
+      if(adaptor){
+        code += "\n\n\n" + adaptor;
+      }
+
+      res.send(code);
     })
   }
 }

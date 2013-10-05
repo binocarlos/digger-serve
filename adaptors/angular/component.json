@@ -1,0 +1,13 @@
+{
+  "name": "diggerserve-angular",
+  "description": "Angular adaptor for the digger injection",
+  "version": "0.0.1",
+  "main": "index.js",
+  "scripts": [
+    "index.js"
+  ],
+  "dependencies": {
+    "binocarlos/digger-for-angular": "*"
+  },
+  "remotes": []
+}

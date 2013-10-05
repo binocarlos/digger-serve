@@ -165,6 +165,7 @@ DiggerServe.prototype.socket_connector = function(){
 
 		// the local functions we have registered with the radio
 		var listeners = {};
+		var user = null;
 
 		socket.on('data', function(payload) {
       
@@ -176,6 +177,11 @@ DiggerServe.prototype.socket_connector = function(){
       */
       payload = JSON.parse(payload);
 
+      /*
+      
+      	run a backend warehouse request that has come from a client socket
+      	
+      */
       if(payload.type==='request'){
 
       	var req = payload.data;
@@ -207,6 +213,20 @@ DiggerServe.prototype.socket_connector = function(){
      		})
 
       }
+      /*
+      
+      	register client user based on token
+      	(well - it will be based on token)
+      	
+      */
+      else if(payload.type=='auth'){
+      	user = payload.data;      	
+      }
+      /*
+      
+      	run a radio request from a client socket
+      	
+      */
       else if(payload.type=='radio'){
 
       	var req = payload.data;
@@ -218,6 +238,11 @@ DiggerServe.prototype.socket_connector = function(){
       		if(listeners[req.channel]){
       			return;
       		}
+
+      		self.radio('talk', 'subscribe.' + req.channel, {
+      			id:socket.id,
+      			user:user
+      		})
 
       		var listener = listeners[req.channel] = function(channel, data){
 
@@ -243,6 +268,11 @@ DiggerServe.prototype.socket_connector = function(){
       	}
 
       }
+      /*
+      
+      	unknown socket message
+      	
+      */
       else{
       	socket.write(JSON.stringify({
         	type:'error',
@@ -253,11 +283,16 @@ DiggerServe.prototype.socket_connector = function(){
     })
 
     socket.on('close', function(){
-    	socket = null;
     	for(var key in listeners){
     		var listener = listeners[key];
       	self.radio('cancel', key, listener);
+      	self.radio('talk', 'unsubscribe.' + key, {
+    			id:socket.id,
+    			user:user
+    		})
     	}
+    	socket = null;
+    	user = null;
     	listeners = null;
     })
 
@@ -325,13 +360,52 @@ DiggerServe.prototype.digger_express = function(config){
 	this.ensure_sockets();
 
 	var diggerapp = express();
-  diggerapp.get('/digger.js', Injector({
-    appconfig:config
-  }));
-  diggerapp.get('/digger.min.js', Injector({
-    minified:true,
-    appconfig:config
-  }));
+	var injector = Injector(config);
+
+  diggerapp.get('/digger.js', function(req, res, next){
+  	req.injector_options = {};
+  	injector(req, res, next);
+  });
+  diggerapp.get('/digger.min.js', function(req, res, next){
+  	req.injector_options = {
+  		minified:true
+  	};
+  	injector(req, res, next);
+  });
+
+  diggerapp.get(/\.js$/, function(req, res, next){
+  	var parts = req.url.split('.');
+  	var warehouse_url = parts[0];
+
+  	var adaptor = null;
+  	var adaptors = {
+  		angular:false,
+  		angularplus:false,
+  		angularmin:false,
+  		angularminplus:false
+  	}
+
+  	var features = {
+  		min:false
+  	};
+
+  	parts.forEach(function(part){
+  		if(features[part]!=undefined){
+  			features[part] = true;
+  		}
+
+  		if(adaptors[part]!=undefined){
+  			adaptor = part;
+  		}
+  	})
+
+  	req.injector_options = {
+  		minified:features.min ? true : false,
+  		adaptor:adaptor,
+  		auto_connect:warehouse_url
+  	};
+  	injector(req, res, next);
+  })
 
   diggerapp.use(this.http_connector());
 
