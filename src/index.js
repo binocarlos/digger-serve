@@ -247,6 +247,10 @@ DiggerServe.prototype.socket_connector = function(){
       		var listener = listeners[req.channel] = function(channel, data){
 
       			process.nextTick(function(){
+              if(!socket){
+                return;
+              }
+              
       				socket.write(JSON.stringify({
 			        	type:'radio',
 			        	data:{
