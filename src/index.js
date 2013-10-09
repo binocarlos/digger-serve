@@ -189,9 +189,6 @@ DiggerServe.prototype.socket_connector = function(){
         var headers = req.headers || {};
 
         if(user){
-          console.log('-------------------------------------------');
-          console.log('writing user');
-          console.dir(user);
           headers['x-json-user'] = user;
         }
 
