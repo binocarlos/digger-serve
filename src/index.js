@@ -186,12 +186,21 @@ DiggerServe.prototype.socket_connector = function(){
 
       	var req = payload.data;
 
+        var headers = req.headers || {};
+
+        if(user){
+          console.log('-------------------------------------------');
+          console.log('writing user');
+          console.dir(user);
+          headers['x-json-user'] = user;
+        }
+
       	self.connector({
 	      	id:req.id,
 	        method:req.method,
 	        url:req.url,
 	        query:req.query,
-	        headers:req.headers,
+	        headers:headers,
 	        body:req.body
 	      }, function(error, results){
 
@@ -220,7 +229,18 @@ DiggerServe.prototype.socket_connector = function(){
       	
       */
       else if(payload.type=='auth'){
-      	user = payload.data;      	
+        var data = payload.data;
+        var sessionid = data.sessionid;
+
+        self.redisStore.get(sessionid, function(error, data){
+          var auth = data.auth || {};
+          var sessionuser = auth.loggedIn ? auth.user : null;
+
+          if(sessionuser){
+            user = sessionuser;
+          }
+        })
+
       }
       /*
       

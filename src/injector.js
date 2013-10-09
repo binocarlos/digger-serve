@@ -44,9 +44,6 @@ module.exports = function(appconfig){
       }
     };
 
-    console.log('-------------------------------------------');
-    console.dir(options);
-
     if(options.adaptor){
       var adaptor = __dirname + '/../build/digger' + (options.adaptor ? '.' + options.adaptor : '') + (options.minified ? '.min' : '') + '.js';
       adaptor_path = path.normalize(adaptor);
@@ -60,12 +57,27 @@ module.exports = function(appconfig){
     var user = null;
 
     if(auth.loggedIn){
-      user = {};
+      var authuser = auth.user;
+      var activeproviders = auth.active;
 
-      for(var prop in auth.user){
-        if(prop.charAt(0)!=='_'){
-          user[prop] = auth.user[prop];
+      user = {
+        id:authuser._digger.diggerid,
+        sessionid:req.session.id,
+        warehouse:authuser._digger.diggerwarehouse,
+        username:authuser.username,
+        active:[],
+        providers:{
+
         }
+      };
+
+      var username = null;
+      var active = [];
+      for(var provider in activeproviders){
+        var providerdata = authuser[provider + '_user'];
+
+        user.providers[provider] = providerdata;
+        user.active.push(provider);
       }
     }
 
