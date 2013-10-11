@@ -368,7 +368,6 @@ DiggerServe.prototype.digger_application = function(domains, configurefn){
     domains = [domains];
   }
 	domains.forEach(function(domain){
-		console.log('   domain: ' + domain);
 		vhost.register(domain, diggerapp);
 	})
 
