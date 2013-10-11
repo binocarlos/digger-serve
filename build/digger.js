@@ -3756,17 +3756,49 @@ SupplyChain.prototype.contract = function(req, container){
 */
 SupplyChain.prototype.connect = function(diggerwarehouse, diggerid){
   var self = this;
-  if(!diggerwarehouse || diggerwarehouse.length<=0){
-    diggerwarehouse = '/';
+  if(!utils.isArray(diggerwarehouse)){
+    if(!diggerid){
+      diggerwarehouse = [diggerwarehouse];  
+    }
   }
-  if(diggerwarehouse.charAt(0)!='/'){
-    diggerwarehouse = '/' + diggerwarehouse;
+  else{
+    diggerid = null;
   }
-  var container = self.container(arguments.length>1 ? 'item' : '_supplychain');
-  container.diggerwarehouse(diggerwarehouse);
-  if(arguments.length>1){
-    container.diggerid(diggerid);
+
+  function processurl(url){
+    if(!url || url.length<=0){
+      url = '/';
+    }
+    if(url.charAt(0)!='/'){
+      url = '/' + url;
+    }
+    return url;
   }
+
+  var models = [];
+  if(!utils.isArray(diggerwarehouse)){
+    diggerwarehouse = processurl(diggerwarehouse);
+    models = [{
+      _digger:{
+        tag:diggerid ? 'item' : '_supplychain',
+        diggerwarehouse:diggerwarehouse,
+        diggerid:diggerid
+      }
+    }]
+  }
+  else{
+    models = diggerwarehouse.map(function(warehouseurl){
+      warehouseurl = processurl(warehouseurl);
+      return {
+        _digger:{
+          diggerwarehouse:warehouseurl,
+          tag:'_supplychain'
+        }
+      }
+    })
+  }
+  
+  var container = self.container(models);
   container.supplychain = this;
   return container;
 }
@@ -4140,6 +4172,21 @@ module.exports = function(){
 	}
 
 	return {
+		load:function(warehouses){
+			var self = this;
+			
+			var blueprintwarehouse = $digger.connect(warehouses);
+	    blueprintwarehouse('*')
+	      .ship(function(blueprints){
+	        blueprints.find('blueprint').each(function(blueprint){
+	          if($digger.config.debug){
+	            console.log('-------------------------------------------');
+	            console.log('adding blueprint: ' + blueprint);
+	          }
+	          self.add(blueprint);
+	        })
+	      })
+		},
 	  add:function(blueprint){
 	  	if(!blueprint.fields){
 	  		if(typeof(blueprint.find)==='function'){
@@ -4223,8 +4270,6 @@ module.exports = function(){
 	  }
 	}
 }
-},{}],"digger-sockets":[function(require,module,exports){
-module.exports=require('E9YBgr');
 },{}],"E9YBgr":[function(require,module,exports){
 /*
 
@@ -4361,6 +4406,12 @@ module.exports = function(config){
 		}
 	}
 
+	/*
+	
+		this is the buffer for queries before we are connected
+
+		
+	*/
 	function clear_buffer(){
   	var usebuffer = [].concat(request_buffer);
 		usebuffer.forEach(function(buffered_request){
@@ -4382,35 +4433,23 @@ module.exports = function(config){
 			throw new Error('req must have a url and method');
 		}
 		
-		/*
-		
-			------------------------------------------------------
-			------------------------------------------------------
-			------------------------------------------------------
-			------------------------------------------------------
-			------------------------------------------------------
-
-			THIS IS A TERRIBLE HACK
-
-			I have changed to sockjs - defo a good idea coz it aint
-			bloatware like socket.io
-
-			However - and another good thing - we have lost the old
-			(very hacky) way of accessing the cookie from the handsake
-			of the socket
-
-			So - the solution is to have OAuth Access tokens working
-			alongside cookie logins
-
-			A session can have the OAuth tokens and so those can be
-			written to the page and then they can be submitted to the socket
-
-		*/
 		var headers = req.headers || {};
 
+		/*
+		
+			the user is now encoded into the session id that is written to the socket
+			upon connect
+
+			the session id is got from the original request for the <script src="digger.io" /> tag
+
+			it is encoded into $digger.config.user.sessionid
+			
+		*/
+		/*
 		if(config.user){
 			headers['x-json-user'] = config.user;
 		}
+		*/
 
 		var http_req = {
 			id:utils.littleid(),
@@ -4496,6 +4535,7 @@ module.exports = function(config){
     }
     socketconnected = true;
     $digger.emit('connect');
+    $digger.emit('ready');
     if($digger.config.user){
     	socket.send(JSON.stringify({
 				type:'auth',
@@ -4540,7 +4580,6 @@ module.exports = function(config){
 		
 	*/
 	$digger = Client(run_socket);
-
 	$digger.config = config;
 	$digger.user = config.user;
 	$digger.blueprint = Blueprint();
@@ -4595,7 +4634,9 @@ module.exports = function(config){
 
 	return $digger;
 }
-},{"./blueprints":32,"./templates":35,"digger-client":26,"digger-radio":28,"digger-utils":31}],35:[function(require,module,exports){
+},{"./blueprints":32,"./templates":35,"digger-client":26,"digger-radio":28,"digger-utils":31}],"digger-sockets":[function(require,module,exports){
+module.exports=require('E9YBgr');
+},{}],35:[function(require,module,exports){
 /*
 
 	(The MIT License)

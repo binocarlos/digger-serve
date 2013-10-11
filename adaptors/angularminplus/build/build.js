@@ -17181,35 +17181,17 @@ angular
 
   })
 
-
-
-
-/*
-
-  digger is loaded but lets give the rest of the code a chance to register before we bootstrap
-  
-*/
-setTimeout(function(){
-  
-  /*
-
-    BOOTSTRAP
-    
-  */
-  if(!window.$digger){
-    throw new Error('$digger must be loaded on the same page to use the digger angular module');
-  }
-
-  var app = window.$digger.config.application || 'digger';
-
-  /*
-  
-    this auto adds the Root Controller so the rest of the page has things like user in it's scope
-    
-  */
-  document.documentElement.setAttribute('ng-controller', 'DiggerRootCtrl');
-  angular.bootstrap(document, [app]);  
-}, 100)
+if(!window.$digger){
+  throw new Error('$digger must be loaded on the same page to use the digger angular module');
+}
+else{
+  window.$digger.on('connect', function(){
+    // choose what application to boot - either a user defined one or the default digger one
+    var app = window.$digger.config.application || 'digger';
+    document.documentElement.setAttribute('ng-controller', 'DiggerRootCtrl');
+    angular.bootstrap(document, [app]);    
+  }) 
+}
 });
 require.register("binocarlos-digger-utils-for-angular/index.js", function(exports, require, module){
 /*
