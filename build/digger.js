@@ -3815,7 +3815,7 @@ SupplyChain.prototype.contract_group = function(type, contracts){
   }
 
   // we use this to generate hooked up containers as results
-  var stub = self.container();
+  var stub = Container();
   stub.supplychain = this;
 
   return this.contract(raw, stub);
@@ -4358,6 +4358,8 @@ module.exports = function(){
 	  }
 	}
 }
+},{}],"digger-sockets":[function(require,module,exports){
+module.exports=require('E9YBgr');
 },{}],"E9YBgr":[function(require,module,exports){
 /*
 
@@ -4722,9 +4724,7 @@ module.exports = function(config){
 
 	return $digger;
 }
-},{"./blueprints":32,"./templates":35,"digger-client":26,"digger-radio":28,"digger-utils":31}],"digger-sockets":[function(require,module,exports){
-module.exports=require('E9YBgr');
-},{}],35:[function(require,module,exports){
+},{"./blueprints":32,"./templates":35,"digger-client":26,"digger-radio":28,"digger-utils":31}],35:[function(require,module,exports){
 /*
 
 	(The MIT License)
