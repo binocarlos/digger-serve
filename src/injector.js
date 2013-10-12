@@ -28,7 +28,7 @@ module.exports = function(appconfig){
 
     var host = req.headers.host;
     var baseurl = req.originalUrl.replace(/\/digger\.js/, '');
-
+    var protocol = req.protocol;
     var full_baseurl = '//' + host + baseurl;
 
   	var driver = 'sockets';
@@ -97,9 +97,13 @@ module.exports = function(appconfig){
         configured to point back to here
         
       */
+      var diggerurl = protocol + '://' + host + baseurl;
+
       var digger_config = {
         host:host,
+        protocol:protocol,
         baseurl:baseurl,
+        diggerurl:diggerurl,
         user:user
       }
 
