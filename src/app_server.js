@@ -60,6 +60,10 @@ module.exports = function(domains, configurefn){
 	diggerapp.use(express.session({store: self.redisStore}));
 	diggerapp.use(cors());
 
+	diggerapp.post_setup = function(){
+		
+	}
+
 	if(configurefn){
 		configurefn(diggerapp);
 	}
