@@ -45,6 +45,11 @@ module.exports = function(appconfig){
     var username = null;
     var repo = null;
 
+    var debug = req.query.debug=='y';
+
+    console.log('-------------------------------------------');
+    console.dir(req.query);
+
     // top level component not file in it
     var path = req.url.replace(/^\/([\w-]+)\/([\w-]+)/, function(match, u, r){
       username = u;
@@ -81,7 +86,9 @@ module.exports = function(appconfig){
               ' && cd ' + username + '-' + repo,
               ' && component install',
               ' && component build',
-              ' && uglifyjs build/build.js > build/build.min.js'
+              ' && uglifyjs build/build.js > build/build.min.js',
+              ' && touch build/build.css',
+              ' && uglifycss build/build.css > build/build.min.css'
             ].join('');
 
             child_process.exec(command, {
@@ -93,8 +100,7 @@ module.exports = function(appconfig){
                 res.send(error);
               }
               else{
-                res.sendfile(basefolder + '/build/build.min.js');
-                
+                res.sendfile(basefolder + '/build/build' + (debug ? '' : '.min') + '.js');
               }
               
             })
@@ -117,7 +123,7 @@ module.exports = function(appconfig){
           }
         }
         else{
-          res.sendfile(basefolder + '/build/build.min.js');
+          res.sendfile(basefolder + '/build/build' + (debug ? '' : '.min') + '.js');
         }
       })
     }
