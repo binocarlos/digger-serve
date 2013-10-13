@@ -47,9 +47,6 @@ module.exports = function(appconfig){
 
     var debug = req.query.debug=='y';
 
-    console.log('-------------------------------------------');
-    console.dir(req.query);
-
     // top level component not file in it
     var path = req.url.replace(/^\/([\w-]+)\/([\w-]+)/, function(match, u, r){
       username = u;
