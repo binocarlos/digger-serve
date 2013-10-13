@@ -130,11 +130,11 @@ DiggerServe.prototype.socket_connector = require('./socket_connector');
 	}]
 
 */
-DiggerServe.prototype.digger_application = require('./digger_application');
+DiggerServe.prototype.app_server = require('./app_server');
 
 
 // generate a middleware connector for the JavaScript api
-DiggerServe.prototype.digger_express = require('./digger_express');
+DiggerServe.prototype.digger_middleware = require('./digger_middleware');
 
 // 
 

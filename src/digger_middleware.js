@@ -22,6 +22,7 @@ var vhost = require('express-vhost');
 var path = require('path');
 
 var Injector = require('./injector');
+var Components = require('./components');
 
 var EventEmitter = require('events').EventEmitter;
 
@@ -32,6 +33,21 @@ module.exports = function(config){
 
 	var diggerapp = express();
 	var injector = Injector(config);
+  var component_builder = Components(config);
+
+  /*
+  
+    the component builder
+    
+  */
+  diggerapp.use('/reception/component', function(req, res, next){
+    component_builder(req, res, next);
+  })
+
+  diggerapp.use('/reception/file', function(req, res, next){
+    res.statusCode = 404;
+    res.send('tbc');
+  })
 
   diggerapp.get('/digger.js', function(req, res, next){
   	req.injector_options = {};

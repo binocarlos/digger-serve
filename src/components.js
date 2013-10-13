@@ -19,6 +19,8 @@ var url = require('url');
 var fs = require('fs');
 var async = require('async');
 var path = require('path');
+var wrench = require('wrench');
+var child_process = require('child_process');
 
 /*
 
@@ -27,7 +29,69 @@ var path = require('path');
 */
 
 module.exports = function(appconfig){
+
+  var config = appconfig.components || {};
+  var tmpfolder = '/tmp/diggercomponents';
+  var stat = fs.existsSync(tmpfolder);
+
+  if(stat){
+    wrench.rmdirSyncRecursive(tmpfolder, 0777);
+  }
+
+  wrench.mkdirSyncRecursive(tmpfolder, 0777);
+  
   return function(req, res, next){
-    res.send('ok');
+
+    var username = null;
+    var repo = null;
+
+    // top level component not file in it
+    var path = req.url.replace(/^\/([\w-]+)\/([\w-]+)/, function(match, u, r){
+      username = u;
+      repo = r;
+      return '';
+    });
+    
+    var basefolder = tmpfolder + '/' + username + '-' + repo;
+
+    // is it a file
+    if(path.match(/\.\w+$/)){
+      res.sendfile(basefolder + path);
+    }
+    else{
+      // does /tmp/diggercomponents/binocarlos-digger-url-component exist?
+      fs.stat(basefolder, function(error, stat){
+        if(!stat){
+    
+          var command = [
+            'cd ' + tmpfolder,
+            ' && git clone https://github.com/' + username + '/' + repo + ' ' + username + '-' + repo,
+            ' && cd ' + username + '-' + repo,
+            ' && component install',
+            ' && component build',
+            ' && uglifyjs build/build.js > build/build.min.js'
+          ].join('');
+
+          child_process.exec(command, {
+            
+          }, function(error, stdout, stderr){
+
+            if(error){
+              res.statusCode = 500;
+              res.send(error);
+            }
+            else{
+              res.sendfile(basefolder + '/build/build.min.js');
+              
+            }
+            
+          })
+          
+        }
+        else{
+          res.sendfile(basefolder + '/build/build.min.js');
+        }
+      })
+    }
   }
 }
