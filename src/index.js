@@ -18,18 +18,23 @@
 
 var http = require('http');
 var express = require('express');
-var vhost = require('express-vhost');
+
 var path = require('path');
 var EventEmitter = require('events').EventEmitter;
 var util = require('util');
 var ErrorHandler = require('./errorhandler');
 //var sockets = require('socket.io');
 var sockjs = require('sockjs');
-var Injector = require('./injector');
-
 var RedisStore = require('connect-redis')(express);
-var EventEmitter = require('events').EventEmitter;
+var vhost = require('express-vhost');
 
+/*
+
+  the constructor creates connectors which emit events for digger requests
+
+  whatever orchestration that gets the server going can decide how to proxy the reqs
+  
+*/
 function DiggerServe(options){
 	var self = this;
 
@@ -98,58 +103,7 @@ DiggerServe.prototype.ensure_sockets = function(){
 	direct proxy through to the reception server
 */
 
-DiggerServe.prototype.http_connector = function(){
-
-	var self = this;
-
-	return function(req, res){
-
-		var auth = req.session.auth || {};
-    var user = auth.user;
-
-    var headers = req.headers;
-
-		var headers = {};
-		for(var prop in (req.headers || {})){
-			var value = req.headers[prop];
-
-			if(prop.indexOf('x-json')==0 && typeof(value)=='string'){
-				value = JSON.parse(value);
-			}
-			headers[prop] = value;
-		}
-
-    if(user){
-    	headers['x-json-user'] = user;
-    }
-
-    self.connector({
-      method:req.method.toLowerCase(),
-      url:req.url.split('?')[0],
-      query:req.query,
-      headers:headers,
-      body:req.body
-    }, function(error, result){
-      if(error){
-        var statusCode = 500;
-        error = error.replace(/^(\d+):/, function(match, code){
-          statusCode = code;
-          return '';
-        })
-        res.statusCode = statusCode;
-        res.send(error);
-      }
-      else{
-        res.json(result || []);
-      }
-
-      req = null;
-      res = null;
-    })
-  
-	}
-
-}
+DiggerServe.prototype.http_connector = require('./http_connector');
 
 
 /*
@@ -158,172 +112,8 @@ DiggerServe.prototype.http_connector = function(){
 
 	we proxy digger requests back to the reception socket handler
 */
-DiggerServe.prototype.socket_connector = function(){
+DiggerServe.prototype.socket_connector = require('./socket_connector');
 
-	var self = this;
-	return function(socket){
-
-		// the local functions we have registered with the radio
-		var listeners = {};
-		var user = null;
-
-		socket.on('data', function(payload) {
-      
-      /*
-      
-      	this has to be a strict mapping of fields
-      	because things like internal give the request upgraded permissions
-      	
-      */
-      payload = JSON.parse(payload);
-
-      /*
-      
-      	run a backend warehouse request that has come from a client socket
-      	
-      */
-      if(payload.type==='request'){
-
-      	var req = payload.data;
-
-        var headers = req.headers || {};
-
-        if(user){
-          headers['x-json-user'] = user;
-        }
-
-      	self.connector({
-	      	id:req.id,
-	        method:req.method,
-	        url:req.url,
-	        query:req.query,
-	        headers:headers,
-	        body:req.body
-	      }, function(error, results){
-
-	      	if(!socket){
-	      		return;
-	      	}
-	      	
-	        socket.write(JSON.stringify({
-	        	type:'response',
-	        	data:{
-	        		id:req.id,
-		          error:error,
-		          results:results	
-	        	}
-	        }))
-
-	        req = null;
-	        payload = null;
-     		})
-
-      }
-      /*
-      
-      	register client user based on token
-      	(well - it will be based on token)
-      	
-      */
-      else if(payload.type=='auth'){
-        var data = payload.data;
-        var sessionid = data.sessionid;
-
-        self.redisStore.get(sessionid, function(error, data){
-          var auth = data.auth || {};
-          var sessionuser = auth.loggedIn ? auth.user : null;
-
-          if(sessionuser){
-            user = sessionuser;
-          }
-        })
-
-      }
-      /*
-      
-      	run a radio request from a client socket
-      	
-      */
-      else if(payload.type=='radio'){
-
-      	var req = payload.data;
-
-      	if(req.action=='talk'){
-      		self.radio('talk', req.channel, req.payload);
-      	}
-      	else if(req.action=='listen'){
-      		if(listeners[req.channel]){
-      			return;
-      		}
-
-      		self.radio('talk', 'subscribe.' + req.channel, {
-      			id:socket.id,
-      			user:user
-      		})
-
-      		var listener = listeners[req.channel] = function(channel, data){
-
-      			process.nextTick(function(){
-              if(!socket){
-                return;
-              }
-              
-      				socket.write(JSON.stringify({
-			        	type:'radio',
-			        	data:{
-			        		channel:channel,
-			        		payload:data
-			        	}
-			        }))	
-      			})
-
-      			
-      		}
-
-      		self.radio('listen', req.channel, listener);
-      	}
-      	else if(req.action=='cancel'){
-      		var listener = listeners[req.channel];
-      		self.radio('cancel', req.channel, listener);
-      		delete(listeners[req.channel]);
-      	}
-
-      }
-      /*
-      
-      	unknown socket message
-      	
-      */
-      else{
-      	socket.write(JSON.stringify({
-        	type:'error',
-        	data:'unknown payload type: ' + payload.type
-        }))
-      }
-
-    })
-
-    socket.on('close', function(){
-    	for(var key in listeners){
-    		var listener = listeners[key];
-      	self.radio('cancel', key, listener);
-      	self.radio('talk', 'unsubscribe.' + key, {
-    			id:socket.id,
-    			user:user
-    		})
-    	}
-    	socket = null;
-    	user = null;
-    	listeners = null;
-    })
-
-  }
-      
-}
-
-DiggerServe.prototype.listen = function(port, done){
-	this.server.listen(port, done);
-}
 
 /*
 
@@ -340,220 +130,20 @@ DiggerServe.prototype.listen = function(port, done){
 	}]
 
 */
-DiggerServe.prototype.digger_application = function(domains, configurefn){
+DiggerServe.prototype.digger_application = require('./digger_application');
 
-	var self = this;
-
-	if(!domains || domains.length<=0){
-		console.error('error: you must specify some domains for the application');
-		process.exit(1);
-	}
-
-	var diggerapp = express();
-
-	this.ensure_redis_store();
-
-	var cookieParser = express.cookieParser(this.options.cookie_secret || 'rodneybatman');
-	
-	diggerapp.use(express.query());
-  diggerapp.use(express.responseTime());
-	diggerapp.use(express.bodyParser());
-	diggerapp.use(cookieParser);
-	diggerapp.use(express.session({store: self.redisStore}));
-
-	if(configurefn){
-		configurefn(diggerapp);
-	}
-	
-	if(typeof(domains)==='string'){
-    domains = [domains];
-  }
-	domains.forEach(function(domain){
-		vhost.register(domain, diggerapp);
-	})
-
-	return diggerapp;
-}
 
 // generate a middleware connector for the JavaScript api
-DiggerServe.prototype.digger_express = function(config){
-	var self = this;
-	this.ensure_sockets();
-
-	var diggerapp = express();
-	var injector = Injector(config);
-
-  diggerapp.get('/digger.js', function(req, res, next){
-  	req.injector_options = {};
-  	injector(req, res, next);
-  });
-  diggerapp.get('/digger.min.js', function(req, res, next){
-  	req.injector_options = {
-  		minified:true
-  	};
-  	injector(req, res, next);
-  });
-
-  diggerapp.get(/\.js$/, function(req, res, next){
-  	var parts = req.url.split('.');
-  	var warehouse_url = parts[0];
-
-  	var adaptor = null;
-  	var adaptors = {
-  		angular:false,
-  		angularplus:false,
-  		angularmin:false,
-  		angularminplus:false
-  	}
-
-  	var features = {
-  		min:false
-  	};
-
-  	parts.forEach(function(part){
-  		if(features[part]!=undefined){
-  			features[part] = true;
-  		}
-
-  		if(adaptors[part]!=undefined){
-  			adaptor = part;
-  		}
-  	})
-
-  	req.injector_options = {
-  		minified:features.min ? true : false,
-  		adaptor:adaptor,
-  		auto_connect:warehouse_url
-  	};
-  	injector(req, res, next);
-  })
-
-  diggerapp.use(this.http_connector());
-
-  return diggerapp;
-}
+DiggerServe.prototype.digger_express = require('./digger_express');
 
 // 
+
+DiggerServe.prototype.listen = function(port, done){
+	this.server.listen(port, done);
+}
+
 module.exports = function(options){
 
 	return new DiggerServe(options);
 
 }
-
-
-
-
-/*
-		var socketid = socket.id;
-    var session = socket.handshake.session || {};
-    var auth = session.auth || {};
-    var user = auth.user;
-
-    var request_handler = function(req){
-
-      var id = req.id;
-      var method = req.method;
-
-      var headers = req.headers || {};
-      headers['x-json-user'] = user;
-      
-     	connector({
-      	id:id,
-        method:method,
-        url:req.url,
-        query:req.query,
-        headers:headers,
-        body:req.body
-      }, function(error, results){
-
-        socket.emit('response', {
-          id:id,
-          error:error,
-          results:results
-        })
-
-        req = null;
-
-      })
-
-    }
-
-    socket.on('request', request_handler);
-
-    socket.on('disconnect', function(){
-      session = null;
-      auth = null;
-      user = null;
-  		socket = null;
-  		request_handler = null;
-		})
-*/
-
-// old socket.io stuff - we replaced this with socksjs
-
-/*
-
-	the socket connects and we extract the session data so we get
-	access to the user from a socket request
-
-var _cookie = 'connect.sid';
-
-function authFunction(cookieParser, redisStore){
-	return function(data, accept){
-	  if (data && data.headers && data.headers.cookie) {
-	    cookieParser(data, {}, function(err){
-	      if(err){
-	        return accept('COOKIE_PARSE_ERROR');
-	      }
-	      var sessionId = data.signedCookies[_cookie];
-	      redisStore.get(sessionId, function(err, session){
-	        if(err || !session || !session.auth || !session.auth.loggedIn){
-	          //accept('NOT_LOGGED_IN', false);
-
-	          // not logged in but we still want a socket
-	          accept(null, true);
-	        }
-	        else{
-	          data.session = session;
-	          accept(null, true);
-	        }
-	      });
-	    });
-	  } else {
-	    return accept('MISSING_COOKIE', false);
-	  }
-	}
-}
-*/
-
-/*
-
-	var io = sockets.listen(server);
-	io.enable('browser client minification');  // send minified client
-	io.enable('browser client etag');          // apply etag caching logic based on version number
-	io.enable('browser client gzip');          // gzip the file
-	io.set('log level', process.env.NODE_ENV==='development' ? 1 : 1);                    // reduce logging
-
-	// enable all transports (optional if you want flashsocket support, please note that some hosting
-	// providers do not allow you to create servers that listen on a port different than 80 or their
-	// default port)
-	io.set('transports', [
-	    'websocket'
-	  , 'flashsocket'
-	  , 'htmlfile'
-	  , 'xhr-polling'
-	  , 'jsonp-polling'
-	]);
-*/
-
-
-
-
-  /*
-		  
-  	the socket connector - this is for all applications running
-	
-  
-	io.set('authorization', authFunction(cookieParser, redisStore));
-  io.sockets.on('connection', socket_connector(connector));
-  */	
