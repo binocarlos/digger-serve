@@ -62,31 +62,59 @@ module.exports = function(appconfig){
       // does /tmp/diggercomponents/binocarlos-digger-url-component exist?
       fs.stat(basefolder, function(error, stat){
         if(!stat){
-    
-          var command = [
-            'cd ' + tmpfolder,
-            ' && git clone https://github.com/' + username + '/' + repo + ' ' + username + '-' + repo,
-            ' && cd ' + username + '-' + repo,
-            ' && component install',
-            ' && component build',
-            ' && uglifyjs build/build.js > build/build.min.js'
-          ].join('');
 
-          child_process.exec(command, {
-            
-          }, function(error, stdout, stderr){
+          // the clone command is passed
+          // it can either be a git pull or copy local folder
 
-            if(error){
-              res.statusCode = 500;
-              res.send(error);
-            }
-            else{
-              res.sendfile(basefolder + '/build/build.min.js');
+          function git_clone(){
+            return 'git clone https://github.com/' + username + '/' + repo + ' ' + username + '-' + repo;
+          }
+
+          function copy_local(){
+            return 'cp -rf ' + appconfig.development_folder + '/' + repo + ' ' + username + '-' + repo;
+          }
+
+          function run_build(clone_command){
+            var command = [
+              'cd ' + tmpfolder,
+              ' && ' + clone_command,
+              ' && cd ' + username + '-' + repo,
+              ' && component install',
+              ' && component build',
+              ' && uglifyjs build/build.js > build/build.min.js'
+            ].join('');
+
+            child_process.exec(command, {
               
-            }
-            
-          })
-          
+            }, function(error, stdout, stderr){
+
+              if(error){
+                res.statusCode = 500;
+                res.send(error);
+              }
+              else{
+                res.sendfile(basefolder + '/build/build.min.js');
+                
+              }
+              
+            })
+          }
+
+          if(appconfig.development_folder){
+            fs.stat(appconfig.development_folder + '/' + repo, function(error, stat){
+              // do the git clone
+              if(!stat){
+                run_build(git_clone());
+              }
+              // copy local folder
+              else{
+                run_build(copy_local());
+              }
+            })
+          }
+          else{
+            run_build(git_clone());
+          }
         }
         else{
           res.sendfile(basefolder + '/build/build.min.js');
