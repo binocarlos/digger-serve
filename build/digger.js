@@ -4410,7 +4410,14 @@ module.exports = function(config){
 		console.log('CONFIG');
 		console.dir(config);	
 	}
+
+	var cloneuser = null;
+	if(config.user){
+		cloneuser = config.user;
+		cloneuser = JSON.parse(JSON.stringify(cloneuser));	
+	}
 	
+
 	var socket = new SockJS('//' + (config.host || 'localhost') + '/digger/sockets');
 
 	/*
@@ -4669,9 +4676,13 @@ module.exports = function(config){
 		in all cases the portals run via the socket
 		
 	*/
+	
 	$digger = Client(run_socket);
 	$digger.config = config;
-	$digger.user = config.user;
+	$digger.user = cloneuser;
+	if($digger.user){
+		$digger.user._fullname = cloneuser.fullname;	
+	}
 	$digger.blueprint = Blueprint();
 	$digger.template = Template();
 
