@@ -58,18 +58,24 @@ module.exports = function(appconfig){
 
     if(auth.loggedIn){
       var authuser = auth.user;
+
       var activeproviders = auth.active;
 
       user = {
         id:authuser._digger.diggerid,
         sessionid:req.session.id,
         warehouse:authuser._digger.diggerwarehouse,
-        username:authuser.username,
         active:[],
         providers:{
 
         }
       };
+
+      Object.keys(authuser || {}).forEach(function(prop){
+        if(prop.indexOf('_')!=0 && !user[prop]){
+          user[prop] = authuser[prop];
+        }
+      })
 
       var username = null;
       var active = [];
