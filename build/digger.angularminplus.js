@@ -17383,8 +17383,9 @@ else{
   */
   var app = window.$digger.config.application || 'digger';
   document.documentElement.setAttribute('ng-controller', 'DiggerRootCtrl');
-  angular.bootstrap(document, [app]);    
-  //})
+  angular.element(document).ready(function() {
+    angular.bootstrap(document, [app]);
+  });
 }
 });
 require.register("binocarlos-digger-utils-for-angular/index.js", function(exports, require, module){

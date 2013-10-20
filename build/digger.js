@@ -4425,16 +4425,9 @@ module.exports = function(config){
 		requests issued before we had a socket connection or our other transport was ready
 		
 	*/
-	var request_buffer = [];
+	var request_buffer = [];	
 	var socketconnected = false;
 	var callbacks = {};
-
-	function disconnected_handler(req, reply){
-		request_buffer.push({
-			req:req,
-			reply:reply
-		})
-	}
 
 	function padding(offset){
 		offset = offset || 0;
@@ -4512,10 +4505,34 @@ module.exports = function(config){
 	function clear_buffer(){
   	var usebuffer = [].concat(request_buffer);
 		usebuffer.forEach(function(buffered_request){
-  		run_socket(buffered_request.req, buffered_request.reply);
+			if(buffered_request.fn){
+				buffered_request.fn();
+			}
+			else if(buffered_request.req){
+				run_socket(buffered_request.req, buffered_request.reply);	
+			}
+  		
   	})
   	
   	request_buffer = [];
+	}
+
+
+	/*
+	
+		this is used before the socket is connected to stash thing we will resolve
+		upon connection
+		
+	*/
+	function disconnected_handler(req, reply){
+		if($digger.config.debug){
+			console.log('buffer request');
+			console.dir(req);
+		}
+		request_buffer.push({
+			req:req,
+			reply:reply
+		})
 	}
 
 
@@ -4587,6 +4604,16 @@ module.exports = function(config){
 		}))
 	}
 
+
+	function socket_is_ready(){
+		if(!socketconnected){
+			socketconnected = true;
+			clear_buffer();
+	    $digger.emit('connect');
+	    $digger.emit('ready');	
+		}
+	}
+
 	function socket_answer(payload){
 		payload = payload.toString();
 		payload = JSON.parse(payload);
@@ -4617,14 +4644,26 @@ module.exports = function(config){
 		}
 	}
 
-	function socket_is_ready(){
-		if(!socketconnected){
-			socketconnected = true;
-	    $digger.emit('connect');
-	    $digger.emit('ready');	
+	/*
+	
+		manually write to the socket once it's ready
+		(used by radio subscriptions)
+		
+	*/
+	function bufferred_write(req){
+		function do_write(){
+			socket.send(req);
+		}
+		if(socketconnected){
+			do_write();
+		}
+		else{
+			request_buffer.push({
+				fn:do_write
+			})
 		}
 	}
-
+	
 	function run_socket(req, reply){
 		if(socketconnected){
 			connected_handler(req, reply);
@@ -4704,7 +4743,7 @@ module.exports = function(config){
 
 		function send_packet(action, channel, payload){
 
-			socket.send(JSON.stringify({
+			bufferred_write(JSON.stringify({
 				type:'radio',
 				data:{
 					action:action,
