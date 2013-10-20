@@ -17370,12 +17370,21 @@ if(!window.$digger){
   throw new Error('$digger must be loaded on the same page to use the digger angular module');
 }
 else{
-  window.$digger.on('connect', function(){
-    // choose what application to boot - either a user defined one or the default digger one
-    var app = window.$digger.config.application || 'digger';
-    document.documentElement.setAttribute('ng-controller', 'DiggerRootCtrl');
-    angular.bootstrap(document, [app]);    
-  }) 
+  //window.$digger.on('connect', function(){
+  // choose what application to boot - either a user defined one or the default digger one
+
+  /*
+  
+    rely on the socket buffer to hold requests before $digger is connected
+
+    this means we can boot into angular right away on not have markup hanging around on the page
+    for a split second
+    
+  */
+  var app = window.$digger.config.application || 'digger';
+  document.documentElement.setAttribute('ng-controller', 'DiggerRootCtrl');
+  angular.bootstrap(document, [app]);    
+  //})
 }
 });
 require.register("binocarlos-digger-utils-for-angular/index.js", function(exports, require, module){
