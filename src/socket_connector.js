@@ -100,6 +100,11 @@ module.exports = function(){
           if(sessionuser){
             user = sessionuser;
           }
+
+          socket.write(JSON.stringify({
+            type:'auth',
+            data:{}
+          })) 
         })
 
       }
