@@ -44,11 +44,21 @@ module.exports = function(config){
     component_builder(req, res, next);
   })
 
-  diggerapp.use('/reception/file', function(req, res, next){
+  /*
+  
+    the filestore
+    
+  */
+  diggerapp.use('/reception/files', function(req, res, next){
     res.statusCode = 404;
     res.send('tbc');
   })
 
+  /*
+  
+    non-adaptor diggers
+    
+  */
   diggerapp.get('/digger.js', function(req, res, next){
   	req.injector_options = {};
   	injector(req, res, next);
@@ -60,6 +70,11 @@ module.exports = function(config){
   	injector(req, res, next);
   });
 
+  /*
+  
+    adaptor diggers
+    
+  */
   diggerapp.get(/\.js$/, function(req, res, next){
   	var parts = req.url.split('.');
   	var warehouse_url = parts[0];
@@ -94,6 +109,11 @@ module.exports = function(config){
   	injector(req, res, next);
   })
 
+  /*
+  
+    REST API
+    
+  */
   diggerapp.use(self.http_connector());
 
   return diggerapp;

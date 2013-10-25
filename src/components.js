@@ -30,7 +30,7 @@ var child_process = require('child_process');
 
 module.exports = function(appconfig){
 
-  var config = appconfig.components || {};
+  var config = appconfig.config || {};
   var tmpfolder = '/tmp/diggercomponents';
   var stat = fs.existsSync(tmpfolder);
 
@@ -56,6 +56,8 @@ module.exports = function(appconfig){
     
     var basefolder = tmpfolder + '/' + username + '-' + repo;
 
+    console.log('component: ' + basefolder);
+
     // is it a file
     if(path.match(/\.\w+$/)){
       res.sendfile(basefolder + path);
@@ -63,7 +65,11 @@ module.exports = function(appconfig){
     else{
       // does /tmp/diggercomponents/binocarlos-digger-url-component exist?
       fs.stat(basefolder, function(error, stat){
-        if(!stat){
+        if(stat){
+          console.log('existing');
+          res.sendfile(basefolder + '/build/build' + (debug ? '' : '.min') + '.js');
+        }
+        else{
 
           // the clone command is passed
           // it can either be a git pull or copy local folder
@@ -73,7 +79,7 @@ module.exports = function(appconfig){
           }
 
           function copy_local(){
-            return 'cp -rf ' + appconfig.development_folder + '/' + repo + ' ' + username + '-' + repo;
+            return 'cp -rf ' + config.development_folder + '/' + repo + ' ' + username + '-' + repo;
           }
 
           function run_build(clone_command){
@@ -103,15 +109,14 @@ module.exports = function(appconfig){
             })
           }
 
-          if(appconfig.development_folder){
-            fs.stat(appconfig.development_folder + '/' + repo, function(error, stat){
-              // do the git clone
-              if(!stat){
-                run_build(git_clone());
-              }
-              // copy local folder
-              else{
+          if(config.development_folder){
+            fs.stat(config.development_folder + '/' + repo, function(error, stat){
+              
+              if(stat){
                 run_build(copy_local());
+              }
+              else{
+                run_build(git_clone());
               }
             })
           }
@@ -119,9 +124,7 @@ module.exports = function(appconfig){
             run_build(git_clone());
           }
         }
-        else{
-          res.sendfile(basefolder + '/build/build' + (debug ? '' : '.min') + '.js');
-        }
+        
       })
     }
   }
