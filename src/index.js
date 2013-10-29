@@ -45,6 +45,9 @@ function DiggerServe(options){
 
 	// our proxy the hell out of here
 	this.connector = function(req, res){
+		if(!req.headers){
+			req.headers = {};
+		}
 		self.emit('digger:request', req, res);
 	}
 

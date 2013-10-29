@@ -23,17 +23,48 @@ var path = require('path');
 
 var Injector = require('./injector');
 var Components = require('./components');
+var FileStore = require('./filestore');
 
 var EventEmitter = require('events').EventEmitter;
 
 // generate a middleware connector for the JavaScript api
 module.exports = function(config){
 	var self = this;
+
 	self.ensure_sockets();
 
 	var diggerapp = express();
 	var injector = Injector(config);
   var component_builder = Components(config);
+  var filestore = FileStore(config);
+
+  /*
+  
+    checks whether the current request is able to 'get' | 'post' to the warehouse
+    represented by the filepath (/reception/files as been stripped)
+
+    the URL format is /reception/files/warehouseurl/containerid/fieldname.extension
+    
+  */
+  function check_file_access(req, done){
+    var fileurl = req.url;
+
+    // we run a request back to the warehouseurl + /ping to check we are allowed through
+    var req = {
+      method:req.method.toLowerCase(),
+      url:req.url + '/ping'
+    }
+
+    self.connector(req, function(error, answer){
+      if(error){
+        done(error);
+        return;
+        
+      }
+      
+      done(null, answer && answer.length>0);
+    })
+  }
 
   /*
   
@@ -47,11 +78,31 @@ module.exports = function(config){
   /*
   
     the filestore
+
+    the URL format is /reception/files/warehouseurl/containerid/fieldname.extension
     
   */
   diggerapp.use('/reception/files', function(req, res, next){
-    res.statusCode = 404;
-    res.send('tbc');
+
+    check_file_access(req, function(error, status){
+      if(error){
+        res.statusCode = 500;
+        res.send(error);
+        return;
+      }
+
+      if(!status){
+        res.statusCode = 404;
+        res.send(req.url + ' not found');
+      }
+      else{
+        filestore(req, res);
+
+      }
+    })
+    
+
+    
   })
 
   /*
