@@ -88,7 +88,7 @@ module.exports = function(appconfig){
               ' && ' + clone_command,
               ' && cd ' + username + '-' + repo,
               ' && component install',
-              ' && component build',
+              ' && component build --no-require',
               ' && uglifyjs build/build.js > build/build.min.js',
               ' && touch build/build.css',
               ' && uglifycss build/build.css > build/build.min.css'

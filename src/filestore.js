@@ -35,54 +35,88 @@ module.exports = function(config){
 		wrench.mkdirSyncRecursive(filestore_path, 0777);
 	}
 
+  function copyFile(source, target, cb) {
+    var cbCalled = false;
+
+    var rd = fs.createReadStream(source);
+    rd.on("error", function(err) {
+      done(err);
+    });
+    var wr = fs.createWriteStream(target);
+    wr.on("error", function(err) {
+      done(err);
+    });
+    wr.on("close", function(ex) {
+      done();
+    });
+    rd.pipe(wr);
+
+    function done(err) {
+      if (!cbCalled) {
+        cb(err);
+        cbCalled = true;
+      }
+    }
+  }
+
 	function ensure_folder(path, done){
 		mkdirp(path, 0777, done);
 	}
 
-  return function(req, res){
-  	var method = req.method.toLowerCase();
+  return {
+    upload:function(from, to, done){
+      var parts = to.split('/');
+      var filename = parts.pop();
+      var folder = parts.join('/');
+      ensure_folder(filestore_path + folder, function(error){
+        copyFile(from, filestore_path + to, done);
 
-  	if(method=='get'){
-  		fs.stat(filestore_path + req.url, function(error, stat){
-  			if(error || !stat){
-  				res.statusCode = 404;
-  				res.send(req.url + ' not found');
-  			}
-  			else if(stat.isDirectory()){
-  				res.send('');
-  			}
-  			else{
-  				res.sendfile(filestore_path + req.url);		
-  			}
-  			
-  		})
-  		
-  	}
-  	else{
-  		if(req.url.match(/\.\w+$/)){
-  			var parts = req.url.split('/');
-  			var filename = parts.pop();
-  			var folder = parts.join('/');
-  			var fullpath = folder + '/' + filename;
-  			ensure_folder(folder, function(error){
-  				if(error){
-  					res.statusCode = 500;
-  					res.send(error);
-  				}
-  				else{
-  					var stream = fs.createWriteStream(fullpath);
-  					req.on('end', function(){
-  						res.send('ok');
-  					})
-  					req.pipe(stream);
-  				}
-  			})
-  		}
-  		else{
-  			res.statusCode = 500;
-  			res.send('cannot post to a directory');
-  		}
-  		
-  	}
+      })
+    },
+    serve:function(req, res){
+      var method = req.method.toLowerCase();
+
+      if(method=='get'){
+        fs.stat(filestore_path + unescape(req.url), function(error, stat){
+          if(error || !stat){
+            res.statusCode = 404;
+            res.send(req.url + ' not found');
+          }
+          else if(stat.isDirectory()){
+            res.send('');
+          }
+          else{
+            res.sendfile(filestore_path + req.url);
+          }
+        })
+      }
+      else{
+        if(req.url.match(/\.\w+$/)){
+          var parts = req.url.split('/');
+          var filename = parts.pop();
+          var folder = parts.join('/');
+          var fullpath = folder + '/' + filename;
+          ensure_folder(folder, function(error){
+            if(error){
+              res.statusCode = 500;
+              res.send(error);
+            }
+            else{
+              var stream = fs.createWriteStream(fullpath);
+              req.on('end', function(){
+                res.send('ok');
+              })
+              req.pipe(stream);
+            }
+          })
+        }
+        else{
+          res.statusCode = 500;
+          res.send('cannot post to a directory');
+        }
+        
+      }
+    }
   }
+  
 }

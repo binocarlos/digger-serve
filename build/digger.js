@@ -4741,6 +4741,8 @@ module.exports = function(config){
 	}
 	$digger.blueprint = Blueprint();
 	$digger.template = Template();
+	$digger.littleid = utils.littleid;
+	$digger.diggerid = utils.diggerid;
 
 	/*
 	

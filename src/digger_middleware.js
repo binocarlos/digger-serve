@@ -46,20 +46,20 @@ module.exports = function(config){
     the URL format is /reception/files/warehouseurl/containerid/fieldname.extension
     
   */
-  function check_file_access(req, done){
-    var fileurl = req.url;
-
+  function check_warehouse_access(user, warehouseurl, method, done){
     // we run a request back to the warehouseurl + /ping to check we are allowed through
     var req = {
-      method:req.method.toLowerCase(),
-      url:req.url + '/ping'
+      method:method.toLowerCase(),
+      url:warehouseurl + '/ping',
+      headers:{
+        'x-json-user':user
+      }
     }
 
     self.connector(req, function(error, answer){
       if(error){
         done(error);
         return;
-        
       }
       
       done(null, answer && answer.length>0);
@@ -77,6 +77,53 @@ module.exports = function(config){
 
   /*
   
+    the file form uploader (where the file is a parameter not the raw body)
+    
+  */
+  diggerapp.post('/reception/files/upload', function(req, res, next){
+    var file = req.files.file;
+
+    if(file){
+      var warehousepath = req.headers['x-warehouse'];
+      var container = req.headers['x-container-id'];
+      
+      var url = warehousepath + '/' + container + '/' + file.name;
+
+      var auth = req.session.auth || {};
+      var user = auth.user;
+
+      check_warehouse_access(user, warehousepath + '/' + container, 'post', function(error, status){
+        if(error){
+          res.statusCode = 500;
+          res.send(error);
+          return;
+        }
+
+        if(!status){
+          res.statusCode = 404;
+          res.send(req.url + ' not found');
+        }
+        else{
+          filestore.upload(file.path, url, function(error){
+            if(error){
+              res.statusCode = 500;
+              res.send(error);
+            }
+            else{
+              res.send(url);
+            }
+          })
+        }
+      })
+    }
+    else{
+      res.statusCode = 500;
+      res.send('no file uploaded');
+    }
+  })
+
+  /*
+  
     the filestore
 
     the URL format is /reception/files/warehouseurl/containerid/fieldname.extension
@@ -84,7 +131,10 @@ module.exports = function(config){
   */
   diggerapp.use('/reception/files', function(req, res, next){
 
-    check_file_access(req, function(error, status){
+    var auth = req.session.auth || {};
+    var user = auth.user;
+
+    check_warehouse_access(user, req.url, req.method, function(error, status){
       if(error){
         res.statusCode = 500;
         res.send(error);
@@ -96,8 +146,7 @@ module.exports = function(config){
         res.send(req.url + ' not found');
       }
       else{
-        filestore(req, res);
-
+        filestore.serve(req, res);
       }
     })
     
