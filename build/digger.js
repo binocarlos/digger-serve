@@ -1186,6 +1186,10 @@ Container.prototype.title = function(){
 
 Container.prototype.summary = function(options){
 
+  if(!this.diggerid()){
+    return '';
+  }
+
   options = options || {};
 
   var parts = [];
@@ -4218,6 +4222,22 @@ module.exports = function(){
 	        })
 	        done && done();
 	      })
+		},
+		build_default:function(container){
+			var blueprint = $digger.create('blueprint');
+
+			Object.keys(container.attr() || {}).forEach(function(prop){
+				if(prop.indexOf('_')!=0){
+					var field = $digger.create('field', {
+						name:prop
+					})
+					blueprint.append(field);
+				}
+			})
+
+			this.process(blueprint);
+
+			return blueprint;
 		},
 		reset:function(){
 			blueprints = {};

@@ -75,6 +75,10 @@ module.exports = function(config){
     component_builder(req, res, next);
   })
 
+  function save_file(user, warehousepath, localfile, targetfile, done){
+    
+  }
+
   /*
   
     the file form uploader (where the file is a parameter not the raw body)
@@ -84,43 +88,68 @@ module.exports = function(config){
     var file = req.files.file;
 
     if(file){
-      var warehousepath = req.headers['x-warehouse'];
-      var container = req.headers['x-container-id'];
+      var warehousepath = req.body.warehouse;
+      var container = req.body.containerid;
+      var auth = req.session.auth || {};
+      var user = auth.user;
       
       var url = warehousepath + '/' + container + '/' + file.name;
 
-      var auth = req.session.auth || {};
-      var user = auth.user;
+      check_warehouse_access(user, warehousepath, 'post', function(error){
+        filestore.upload(file.path, url, function(error){
+          if(error){
+            res.statusCode = 500;
+            res.send(error);
+            return;
+          }
 
-      check_warehouse_access(user, warehousepath + '/' + container, 'post', function(error, status){
-        if(error){
-          res.statusCode = 500;
-          res.send(error);
-          return;
-        }
-
-        if(!status){
-          res.statusCode = 404;
-          res.send(req.url + ' not found');
-        }
-        else{
-          filestore.upload(file.path, url, function(error){
-            if(error){
-              res.statusCode = 500;
-              res.send(error);
-            }
-            else{
-              res.send(url);
-            }
-          })
-        }
-      })
+          res.send(url);
+        })
+      })      
     }
     else{
       res.statusCode = 500;
       res.send('no file uploaded');
     }
   })
+
+
+  /*
+  
+    the file importer - we generate container data from the upload
+
+    the container data is then appended by the GUI
+
+    if the upload is an actual file then we save it and stick the reference into the returned container data
+    
+  */
+  diggerapp.post('/reception/files/import', function(req, res, next){
+    var file = req.files.file;
+
+    if(file){
+
+      var warehousepath = req.body.warehouse;
+      var auth = req.session.auth || {};
+      var user = auth.user;
+      
+      check_warehouse_access(user, warehousepath, 'post', function(error){
+        filestore.import(file.path, file.name, warehousepath, function(error, data){
+          if(error){
+            res.statusCode = 500;
+            res.send(error);
+            return;
+          }
+
+          res.send(data);
+        })
+      })   
+    }
+    else{
+      res.statusCode = 500;
+      res.send('no file uploaded');
+    }
+  })
+
 
   /*
   

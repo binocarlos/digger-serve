@@ -20,6 +20,9 @@ var async = require('async');
 var path = require('path');
 var wrench = require('wrench');
 var mkdirp = require('mkdirp');
+var Client = require('digger-client');
+var mime = require('mime');
+var csv = require('csv');
 
 module.exports = function(config){
 
@@ -63,7 +66,133 @@ module.exports = function(config){
 		mkdirp(path, 0777, done);
 	}
 
+
+  var import_processors = {
+    csv:function(localfile, done){
+      fs.readFile(localfile, 'utf8', function(error, st){
+        csv()
+        .from.string(st)
+        .to.array( function(data){
+          
+          var fields = data[0];
+          data.shift();
+
+          fields.map(function(field){
+            return field.replace(/\s+/g, '_').replace(/\W/g, '');
+          })
+
+          var models = data.map(function(row){
+            var model = {};
+
+            fields.forEach(function(field, index){
+              model[field] = row[index];
+            })
+
+            return model;
+          })
+
+          done(null, {
+            type:'csv',
+            fields:fields,
+            models:models
+          });
+        });
+      })
+    },
+    json:function(localfile, done){
+      fs.readFile(localfile, 'utf8', function(error, st){
+        // assume that there is 1 model per line
+        if(st.indexOf('{')==0){
+          var lines = st.split(/\n/);
+          var models = lines.map(function(line){
+            return JSON.parse(line);
+          })
+
+          done(null, models);
+        }
+        else{
+          var models = JSON.parse(st);
+
+          done(null, {
+            type:'json',
+            models:models
+          });
+        }
+      })
+    }
+  }
+
+  var image_formats = {
+    jpg:true,
+    jpeg:true,
+    gif:true,
+    png:true
+  }
+
   return {
+
+    /*
+    
+      turns a file into container data
+      
+    */
+    import:function(from, filename, warehouse, done){
+      var self = this;
+      var extmatch = filename.match(/\.(\w+)$/);
+
+      if(!extmatch){
+        done('no file extension found');
+        return;
+      }
+
+      var ext = extmatch[1].toLowerCase();
+
+      function upload_single_file(tag){
+        var container = Client.Container(tag, {
+          name:filename,
+          ext:ext,
+          mimetype:mime.lookup(ext)
+        }).addClass(ext);
+
+        var url = warehouse + '/' + container.diggerid() + '/' + filename;
+
+        container.attr('src', url);
+
+        var data = container.toJSON();
+        self.upload(from, url, function(error){
+          if(error){
+            done(error);
+            return;
+          }
+          done(null, {
+            type:'file',
+            models:data
+          });
+        })
+      }
+
+      // image file
+      if(image_formats[ext]){
+        upload_single_file('img');
+      }
+      // process file
+      else if(import_processors[ext]){
+        var fn = import_processors[ext];
+
+        fn(from, function(error, data){
+          if(error){
+            done(error);
+          }
+          else{
+            done(null, data);
+          }
+        })
+      }
+      // normal file
+      else{
+        upload_single_file('file');
+      }
+    },
     upload:function(from, to, done){
       var parts = to.split('/');
       var filename = parts.pop();
