@@ -18742,16 +18742,17 @@ angular
           $scope.setmode(mode);
         })
 
+        
+
         $scope.$watch('settings.blueprints', function(blueprints){
           if(!blueprints){
             return;
           }
-          $scope.addchildren = blueprints;
+          $scope.addchildren = $digger.blueprint.filter_children(blueprints, $scope.blueprint);
         })
 
         $scope.render_children = function(){
           var container = $scope.container;
-
 
           $scope.children = container.children().containers();
 
@@ -18767,10 +18768,10 @@ angular
             container.digger('icon', $scope.iconfn(container));
           }
 
-          if(!$scope.settings.blueprints){
-            var addchildren = $digger.blueprint.get_add_children($scope.blueprint);
-            $scope.addchildren = addchildren ? addchildren.containers() : [];
-          }
+          //if(!$scope.settings.blueprints){
+            var addchildren = $digger.blueprint.all_containers(true);
+            $scope.addchildren = $digger.blueprint.filter_children(addchildren, $scope.blueprint);
+          //}
           
           var digger_leaf = container.digger('leaf');
 
