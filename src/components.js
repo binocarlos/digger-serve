@@ -74,6 +74,10 @@ module.exports = function(appconfig){
           // the clone command is passed
           // it can either be a git pull or copy local folder
 
+          function git_ok(){
+            return (username || '').match(/\w/) && (repo || '').match(/\w/);
+          }
+
           function git_clone(){
             return 'git clone https://github.com/' + username + '/' + repo + ' ' + username + '-' + repo;
           }
@@ -111,17 +115,36 @@ module.exports = function(appconfig){
 
           if(config.development_folder){
             fs.stat(config.development_folder + '/' + repo, function(error, stat){
+
+              if(error){
+                res.statusCode = 404;
+                res.send('not found');
+                return;
+              }
               
               if(stat){
                 run_build(copy_local());
               }
               else{
-                run_build(git_clone());
+                if(!git_ok()){
+                  res.statusCode = 404;
+                  res.send('not found');
+                }
+                else{
+                  run_build(git_clone());  
+                }
+                
               }
             })
           }
           else{
-            run_build(git_clone());
+            if(!git_ok()){
+              res.statusCode = 404;
+              res.send('not found');
+            }
+            else{
+              run_build(git_clone());  
+            }
           }
         }
         

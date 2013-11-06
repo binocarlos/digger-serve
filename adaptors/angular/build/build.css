@@ -4,10 +4,16 @@ input::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
 }
+::-webkit-validation-bubble-message { display: none; }
+
+.digger-form-invis{
+	opacity:0;
+}
 
 ul.nav.nav-list.abn-tree i.indented {
   padding: 2px;
 }
+/*
 .abn-tree-animate-enter {
   transition: 150ms linear all;
   position: relative;
@@ -30,6 +36,7 @@ ul.nav.nav-list.abn-tree i.indented {
   max-height: 0px;
   opacity: 0;
 }
+*/
 ul.nav.nav-list.abn-tree .level-1 .indented {
   position: relative;
   left: 0px;
@@ -75,6 +82,28 @@ ul.nav.nav-list.abn-tree li.active>a{
   background-color:#0088cc;
   color:#fff;
 }
+.json-markup {
+	line-height: 17px;
+	font-size: 13px;
+	font-family: monospace;
+	white-space: pre;
+}
+.json-markup-key {
+	font-weight: bold;
+}
+.json-markup-bool {
+	color: firebrick;
+}
+.json-markup-string {
+	color: green;
+}
+.json-markup-null {
+	color: gray;
+}
+.json-markup-number {
+	color: blue;
+}
+
 .digger-viewer-container{
 	float:left;
 	width:100px;
@@ -82,7 +111,14 @@ ul.nav.nav-list.abn-tree li.active>a{
 	text-align:center;
 	cursor:pointer;
 	margin:5px;
+	padding:1px;
 }
+
+.digger-viewer-container.selected{
+	border:1px solid #f00;
+	padding:0px;
+}
+
 
 .digger-viewer-container .icon{
 	color:#428bca;

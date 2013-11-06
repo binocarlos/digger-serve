@@ -227,22 +227,146 @@ angular
 
   /*
   
+    setup the dynamic module loader
+    
+  */
+  .config(function($compileProvider){
+  
+    $digger.directive = function(){
+      $compileProvider.directive.apply(null,arguments);
+    }
+    
+  })
+
+
+  .service('AsyncScriptLoader',function($q,$rootScope){
+    
+    var scripts = {};
+    
+    var loadScriptAsync = function(src){
+      if(!scripts[src]){
+        var deferred = $q.defer();
+        
+        var script = document.createElement('script'), run = false;
+        script.type = 'text/javascript';
+        script.src = src;
+        
+        script.onload = script.onreadystatechange = function() {
+          if( !run && (!this.readyState || this.readyState === 'complete') ){
+            run = true;
+            deferred.resolve('Script ready: ' + src);
+            $rootScope.$digest();
+          }
+        };
+        document.body.appendChild(script);
+        
+        scripts[src] = deferred.promise;
+      }
+      
+      return scripts[src];
+    }
+    
+    return {
+      load:loadScriptAsync
+    };
+    
+  })
+
+
+  /*
+  
+    the loader itself
+
+    this is a client side angular proxy for components living on github
+
+    we connect to the core api on /reception/component which the HTTP intercepts
+
+    it downloads and builds the component on the server
+
+    the module.exports must be the string we compile into the field
+
+    it can register directives on window.$diggercomponents.directive('name', function(){})
+    
+  */
+  .service('DiggerComponentLoader',function(AsyncScriptLoader,$q,$rootScope,$http){
+    
+    var baseurl = $digger.config.diggerurl + '/reception/component';
+    
+    var components = {};
+    
+    var loadComponent = function(name){
+      if(!components[name]){
+
+        // hit the top for the javascript - this will 302 to the actual code once built
+        var javascript_src = baseurl + '/' + name;
+        var parts = name.split('/');
+        var repo = parts.pop();
+        var modulename = name.replace(/\//g, '-');
+
+        // once it has built - we know the css is this path (thank you component : )
+        var css_src = javascript_src + '/build/build' + ($digger.config.debug ? '' : '.min') + '.css';
+
+        javascript_src += ($digger.config.debug ? '?debug=y' : '')
+
+        var deferred = $q.defer();
+
+        AsyncScriptLoader.load(javascript_src).then(function(){
+            var link = document.createElement('link');
+            link.setAttribute('rel', 'stylesheet');
+            link.setAttribute('type', 'text/css');
+            link.setAttribute('href', css_src);
+            document.getElementsByTagName('head')[0].appendChild(link);
+
+            // the module will return the HTML
+            // it has registered directives with window.$diggercomponents already
+            var module = window.require(repo);
+            var html = '';
+
+            // the module is angular markup
+            if(typeof(module)==='string'){
+              html = module;
+            }
+            // the module has blueprints and markup
+            else{
+              html = module.html;
+            }
+
+            deferred.resolve(html);
+        })
+
+        components[name] = deferred.promise;
+      }
+
+      return components[name];
+    }
+    
+    return {
+      load:loadComponent
+    };
+    
+  })
+
+
+  /*
+  
     make sure that the $digger object has been loaded onto the page
     
   */
-  .run([function($rootScope){
+  .run([function($rootScope, xmlDecoder){
     
     /*
     
       auto template injection
       
+      this is for when the templates are embedded into the page manually
     */
     var templates = {};
 
     var scripts = angular.element(document).find('script');
 
-    scripts.each(function(index){
-      var script = scripts.eq(index);
+    for(var i=0; i<scripts.length; i++){
+      var script = angular.element(scripts[i]);
+      var html = script.html();
       if(script.attr('type')==='digger/field'){
         var name = script.attr('name');
         var html = script.html();
@@ -253,7 +377,13 @@ angular
         }
         $digger.template.add(name, html);
       }
-    })
+      else if(script.attr('type')==='digger/blueprint'){
+        var blueprint_container = xmlDecoder(html);
+        if(blueprint_container){
+          $digger.blueprint.add(blueprint_container);
+        }
+      }
+    }
 
     /*
     
@@ -262,6 +392,8 @@ angular
     */
    
   }])
+
+
 
   /*
   
@@ -303,35 +435,27 @@ angular
 
   })
 
+if(!window.$digger){
+  throw new Error('$digger must be loaded on the same page to use the digger angular module');
+}
+else{
+  //window.$digger.on('connect', function(){
+  // choose what application to boot - either a user defined one or the default digger one
 
-
-
-/*
-
-  digger is loaded but lets give the rest of the code a chance to register before we bootstrap
-  
-*/
-setTimeout(function(){
-  
   /*
+  
+    rely on the socket buffer to hold requests before $digger is connected
 
-    BOOTSTRAP
+    this means we can boot into angular right away on not have markup hanging around on the page
+    for a split second
     
   */
-  if(!window.$digger){
-    throw new Error('$digger must be loaded on the same page to use the digger angular module');
-  }
-
   var app = window.$digger.config.application || 'digger';
-
-  /*
-  
-    this auto adds the Root Controller so the rest of the page has things like user in it's scope
-    
-  */
   document.documentElement.setAttribute('ng-controller', 'DiggerRootCtrl');
-  angular.bootstrap(document, [app]);  
-}, 100)
+  angular.element(document).ready(function() {
+    angular.bootstrap(document, [app]);
+  });
+}
 });
 require.register("binocarlos-digger-utils-for-angular/index.js", function(exports, require, module){
 /*
@@ -342,7 +466,7 @@ require.register("binocarlos-digger-utils-for-angular/index.js", function(export
 
 angular
   .module('digger.utils', [
-    
+    'digger.radio'
   ])
 
   .factory('$safeApply', [function($rootScope) {
@@ -362,6 +486,72 @@ angular
     }
   }])
 
+
+  /*
+  
+    load the folders from the resources tree once (but setup a radio)
+    
+  */
+  .service('$containerTreeData', function($q, $rootScope, $safeApply){
+    var containers = {};
+
+    function load($scope, selector){
+      if(!containers[selector]){
+        var deferred = $q.defer();
+
+        $rootScope.warehouse(selector + ':tree(folder)').ship(function(root){
+          $safeApply($scope, function(){
+            deferred.resolve(root);
+          })
+          
+        })  
+        
+        
+
+        containers[selector] = deferred.promise;
+      }
+
+      return containers[selector];
+    }
+    
+    return {
+      load:load
+    }
+  })
+
+  /*
+  
+    given a tree root and a container id - return an array of containers
+    that are the ancestors for the id up to the tree root
+    (if the id is found)
+    
+  */
+  .factory('$getAncestors', function(){
+    return function(root, container){
+      var match = root.find('=' + container.diggerid());
+
+      if(match.isEmpty()){
+        return [];
+      }
+
+      var ancestors = [];
+      var current = match;
+
+      while(current){
+        var parent = root.find('=' + current.diggerparentid());
+
+        if(parent.isEmpty()){
+          current = null;
+        }
+        else{
+          ancestors.unshift(parent);
+          current = parent;
+        }
+      }
+
+      return ancestors;
+    }
+  })
 });
 require.register("binocarlos-digger-supplychain-for-angular/index.js", function(exports, require, module){
 /*
@@ -495,6 +685,9 @@ angular
           console.log('radio: ' + channel);
           console.dir(packet);
         }
+        if(!packet.headers){
+          packet.headers = {};
+        }
         var user = packet.headers['x-json-user'];
 
         if(packet.action=='append'){
@@ -609,6 +802,16 @@ angular
     }
   })
 
+  .filter('cutoff', function(){
+    return function (text, length) {
+      text = text || '';
+      if(text.length>length){
+        text = text.substr(0, length) + '...';
+      }
+      return text;
+    }
+  })
+
   .filter('idcolon', function () {
     return function (text, length, end) {
       text = text || '';
@@ -718,6 +921,29 @@ angular
         }
       })
       return filtered;
+    };
+  })
+
+  .filter('viewersort', function() {
+
+    return function(items) {
+      var ret = [].concat(items);
+      ret.sort(function(a, b) {
+        var textA = (a.attr('name') || a.tag()).toUpperCase();
+        var textB = (b.attr('name') || b.tag()).toUpperCase();
+        var folderA = (a.tag()=='folder');
+        var folderB = (b.tag()=='folder');
+
+        if(folderA && !folderB){
+          return -1;
+        }
+        else if(folderB && !folderA){
+          return 1;
+        }
+        
+        return (textA < textB) ? -1 : (textA > textB) ? 1 : 0;
+      });  
+      return ret;
     };
   })
   

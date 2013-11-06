@@ -4199,27 +4199,6 @@ module.exports = function(){
 	        blueprints.find('template').each(function(template){
 	          $digger.template.add(template.attr('name'), template.attr('html'));
 	        })
-	        blueprints.find('controller').each(function(controller){
-
-
-	        	var src = controller.attr('src');
-
-	        	if($digger.config.debug){
-	            console.log('-------------------------------------------');
-	            console.log('adding controller: ' + controller.attr('name'));
-	            console.log(src);
-	          }
-
-	        	try{
-	        		eval.call(window, src);
-	        	} catch(e){
-	        		console.log('-------------------------------------------');
-	        		console.log('ERROR: ');
-	        		console.log(e);
-	        		console.log(e.stack);
-	        	}
-	        	
-	        })
 	        done && done();
 	      })
 		},
@@ -4358,15 +4337,21 @@ module.exports = function(){
 	  	}
 	  	return ret;
 	  },
-	  create:function(name){
-			var blueprint = this.get(name);
+	  create:function(blueprint){
+	  	if(typeof(blueprint)==='string'){
+	  		blueprint = this.get(blueprint);
+	  	}
+			
 			if(!blueprint){
 				return $digger.create(name, {});
 			}
 			var data = blueprint ? {
 				_digger:{
+					leaf:blueprint.attr('leaf'),
+					blueprint:blueprint.attr('name'),
 					tag:blueprint.attr('tag') || blueprint.attr('name'),
-					class:blueprint.attr('class') || []
+					class:blueprint.digger('class') || [],
+					icon:blueprint.attr('icon')
 				}
 			} : {}
 
@@ -4386,6 +4371,8 @@ module.exports = function(){
 	  }
 	}
 }
+},{}],"digger-sockets":[function(require,module,exports){
+module.exports=require('E9YBgr');
 },{}],"E9YBgr":[function(require,module,exports){
 /*
 
@@ -4753,7 +4740,25 @@ module.exports = function(config){
 		
 	*/
 	
-	$digger = Client(run_socket);
+	var supplychain = Client(run_socket);
+
+	var root_warehouse = supplychain.connect(config.root_warehouse ? config.root_warehouse : '/');
+
+	$digger = function(){
+		if(typeof(arguments[0])==='function'){
+			return $digger.on('ready', arguments[0]);
+		}
+		else{
+			return root_warehouse.select.apply(root_warehouse, utils.toArray(arguments));
+		}
+	}
+	var names = ['on', 'emit', 'connect', 'merge', 'pipe', 'handle', 'container', 'create'];
+	names.forEach(function(name){
+		$digger[name] = function(){
+			return supplychain[name].apply(supplychain, utils.toArray(arguments));
+		}
+	})
+	
 	$digger.config = config;
 	$digger.user = cloneuser;
 	if($digger.user){
@@ -4813,9 +4818,7 @@ module.exports = function(config){
 
 	return $digger;
 }
-},{"./blueprints":32,"./templates":35,"digger-client":26,"digger-radio":28,"digger-utils":31}],"digger-sockets":[function(require,module,exports){
-module.exports=require('E9YBgr');
-},{}],35:[function(require,module,exports){
+},{"./blueprints":32,"./templates":35,"digger-client":26,"digger-radio":28,"digger-utils":31}],35:[function(require,module,exports){
 /*
 
 	(The MIT License)

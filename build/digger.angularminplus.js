@@ -17204,7 +17204,17 @@ angular
 
             // the module will return the HTML
             // it has registered directives with window.$diggercomponents already
-            var html = window.require(repo);
+            var module = window.require(repo);
+            var html = '';
+
+            // the module is angular markup
+            if(typeof(module)==='string'){
+              html = module;
+            }
+            // the module has blueprints and markup
+            else{
+              html = module.html;
+            }
 
             deferred.resolve(html);
         })
@@ -17227,7 +17237,7 @@ angular
     make sure that the $digger object has been loaded onto the page
     
   */
-  .run([function($rootScope){
+  .run([function($rootScope, xmlDecoder){
     
     /*
     
@@ -17251,6 +17261,12 @@ angular
           console.log(html);
         }
         $digger.template.add(name, html);
+      }
+      else if(script.attr('type')==='digger/blueprint'){
+        var blueprint_container = xmlDecoder(html);
+        if(blueprint_container){
+          $digger.blueprint.add(blueprint_container);
+        }
       }
     }
 
@@ -17335,7 +17351,7 @@ require.register("binocarlos-digger-utils-for-angular/index.js", function(export
 
 angular
   .module('digger.utils', [
-    
+    'digger.radio'
   ])
 
   .factory('$safeApply', [function($rootScope) {
@@ -17355,6 +17371,72 @@ angular
     }
   }])
 
+
+  /*
+  
+    load the folders from the resources tree once (but setup a radio)
+    
+  */
+  .service('$containerTreeData', function($q, $rootScope, $safeApply){
+    var containers = {};
+
+    function load($scope, selector){
+      if(!containers[selector]){
+        var deferred = $q.defer();
+
+        $rootScope.warehouse(selector + ':tree(folder)').ship(function(root){
+          $safeApply($scope, function(){
+            deferred.resolve(root);
+          })
+          
+        })  
+        
+        
+
+        containers[selector] = deferred.promise;
+      }
+
+      return containers[selector];
+    }
+    
+    return {
+      load:load
+    }
+  })
+
+  /*
+  
+    given a tree root and a container id - return an array of containers
+    that are the ancestors for the id up to the tree root
+    (if the id is found)
+    
+  */
+  .factory('$getAncestors', function(){
+    return function(root, container){
+      var match = root.find('=' + container.diggerid());
+
+      if(match.isEmpty()){
+        return [];
+      }
+
+      var ancestors = [];
+      var current = match;
+
+      while(current){
+        var parent = root.find('=' + current.diggerparentid());
+
+        if(parent.isEmpty()){
+          current = null;
+        }
+        else{
+          ancestors.unshift(parent);
+          current = parent;
+        }
+      }
+
+      return ancestors;
+    }
+  })
 });
 require.register("binocarlos-digger-supplychain-for-angular/index.js", function(exports, require, module){
 /*
@@ -17488,6 +17570,9 @@ angular
           console.log('radio: ' + channel);
           console.dir(packet);
         }
+        if(!packet.headers){
+          packet.headers = {};
+        }
         var user = packet.headers['x-json-user'];
 
         if(packet.action=='append'){
@@ -17602,6 +17687,16 @@ angular
     }
   })
 
+  .filter('cutoff', function(){
+    return function (text, length) {
+      text = text || '';
+      if(text.length>length){
+        text = text.substr(0, length) + '...';
+      }
+      return text;
+    }
+  })
+
   .filter('idcolon', function () {
     return function (text, length, end) {
       text = text || '';
@@ -17711,6 +17806,29 @@ angular
         }
       })
       return filtered;
+    };
+  })
+
+  .filter('viewersort', function() {
+
+    return function(items) {
+      var ret = [].concat(items);
+      ret.sort(function(a, b) {
+        var textA = (a.attr('name') || a.tag()).toUpperCase();
+        var textB = (b.attr('name') || b.tag()).toUpperCase();
+        var folderA = (a.tag()=='folder');
+        var folderB = (b.tag()=='folder');
+
+        if(folderA && !folderB){
+          return -1;
+        }
+        else if(folderB && !folderA){
+          return 1;
+        }
+        
+        return (textA < textB) ? -1 : (textA > textB) ? 1 : 0;
+      });  
+      return ret;
     };
   })
   
