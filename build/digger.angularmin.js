@@ -677,90 +677,16 @@ angular
       $scope.$on('$destroy', cleanup);
         
       radio = container.radio();
-        
-      radio.listen('*', function(channel, packet){
+      radio.bind();
 
-        if($digger.config.debug){
-          console.log('-------------------------------------------');
-          console.log('radio: ' + channel);
-          console.dir(packet);
-        }
-        if(!packet.headers){
-          packet.headers = {};
-        }
-        var user = packet.headers['x-json-user'];
-
-        if(packet.action=='append'){
-
-          if(!packet.context){
-            return;
-          }
-
-          var target = packet.context ? container.find('=' + packet.context._digger.diggerid) : container;
-
-          if(target.isEmpty()){
-            return;
-          }
-
-          var to_append = $digger.create(packet.body);
-
-          $safeApply($scope, function(){
-            to_append.each(function(append){
-              var check = target.find('=' + append.diggerid());
-              if(check.count()<=0){
-                target.append(append);
-
-              }
-            })
-            $scope.$emit('radio:event', {
-              action:'append',
-              user:user,
-              target:target,
-              data:to_append
-            })
-          })
-        }
-        else if(packet.action=='save'){
-          var target_id = packet.body._digger.diggerid;
-          var target = container.find('=' + target_id);
-
-          if(target.isEmpty()){
-            return;
-          }
-
-          $safeApply($scope, function(){
-            target.inject_data(packet.body);
-            $scope.$emit('radio:event', {
-              action:'save',
-              user:user,
-              target:target
-            })
-          })
-        }
-        else if(packet.action=='remove'){
-          var parent_id = packet.body._digger.diggerparentid;
-          var target_id = packet.body._digger.diggerid;
-
-          var parent = parent_id ? container.find('=' + parent_id) : container;
-          var target = container.find('=' + target_id);
-
-          if(parent.isEmpty() || target.isEmpty()){
-            return;
-          }
-
-          $safeApply($scope, function(){
-            parent.get(0)._children = parent.get(0)._children.filter(function(model){
-              return model._digger.diggerid!=target.diggerid()
-            })
-
-            $scope.$emit('radio:event', {
-              action:'remove',
-              user:user,
-              target:target
-            })
-          })
-        }
+      radio.on('radio:event', function(packet){
+        console.log('-------------------------------------------');
+        console.log('YO');
+        $safeApply($scope, function(){
+          $scope.$emit('radio:event', packet);
+        })
       })
+        
     }
 
   })

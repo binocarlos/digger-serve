@@ -124,3 +124,12 @@ ul.nav.nav-list.abn-tree li.active>a{
 	color:#428bca;
 	font-size:3em;
 }
+
+.digger-details-icon{
+	color:#428bca;
+	font-size:1.5em;
+}
+
+.viewer-details-row{
+	cursor:pointer;
+}

@@ -17208,90 +17208,16 @@ angular
       $scope.$on('$destroy', cleanup);
         
       radio = container.radio();
-        
-      radio.listen('*', function(channel, packet){
+      radio.bind();
 
-        if($digger.config.debug){
-          console.log('-------------------------------------------');
-          console.log('radio: ' + channel);
-          console.dir(packet);
-        }
-        if(!packet.headers){
-          packet.headers = {};
-        }
-        var user = packet.headers['x-json-user'];
-
-        if(packet.action=='append'){
-
-          if(!packet.context){
-            return;
-          }
-
-          var target = packet.context ? container.find('=' + packet.context._digger.diggerid) : container;
-
-          if(target.isEmpty()){
-            return;
-          }
-
-          var to_append = $digger.create(packet.body);
-
-          $safeApply($scope, function(){
-            to_append.each(function(append){
-              var check = target.find('=' + append.diggerid());
-              if(check.count()<=0){
-                target.append(append);
-
-              }
-            })
-            $scope.$emit('radio:event', {
-              action:'append',
-              user:user,
-              target:target,
-              data:to_append
-            })
-          })
-        }
-        else if(packet.action=='save'){
-          var target_id = packet.body._digger.diggerid;
-          var target = container.find('=' + target_id);
-
-          if(target.isEmpty()){
-            return;
-          }
-
-          $safeApply($scope, function(){
-            target.inject_data(packet.body);
-            $scope.$emit('radio:event', {
-              action:'save',
-              user:user,
-              target:target
-            })
-          })
-        }
-        else if(packet.action=='remove'){
-          var parent_id = packet.body._digger.diggerparentid;
-          var target_id = packet.body._digger.diggerid;
-
-          var parent = parent_id ? container.find('=' + parent_id) : container;
-          var target = container.find('=' + target_id);
-
-          if(parent.isEmpty() || target.isEmpty()){
-            return;
-          }
-
-          $safeApply($scope, function(){
-            parent.get(0)._children = parent.get(0)._children.filter(function(model){
-              return model._digger.diggerid!=target.diggerid()
-            })
-
-            $scope.$emit('radio:event', {
-              action:'remove',
-              user:user,
-              target:target
-            })
-          })
-        }
+      radio.on('radio:event', function(packet){
+        console.log('-------------------------------------------');
+        console.log('YO');
+        $safeApply($scope, function(){
+          $scope.$emit('radio:event', packet);
+        })
       })
+        
     }
 
   })
@@ -18678,6 +18604,10 @@ angular
           branchelem.focus();
           branchelem.select();
         }
+
+        if(!$scope.settings.view){
+          $scope.settings.view = 'details';
+        }
       },
       controller:function($scope){
 
@@ -18689,6 +18619,28 @@ angular
           $scope.diggeractive = $scope.settings.diggeractive;
         }
 
+        $scope.class_summary = function(container){
+          if(!container){
+            return '';
+          }
+          var classes = container.digger('class') || [];
+
+          return classes.map(function(classname){
+            return '.' + classname;
+          }).join(' ');
+        }
+        $scope.tag_summary = function(container){
+          if(!container || !container.tag()){
+            return '';
+          }
+          return '<' + container.tag() + '>';
+        }
+        $scope.id_summary = function(container){
+          if(!container || !container.id()){
+            return '';
+          }
+          return '#' + container.id();
+        }
         $scope.hidedelete = function(){
           if(!$scope.settings){
             return false;
@@ -18875,7 +18827,7 @@ angular
   })
 });
 require.register("binocarlos-digger-viewer-for-angular/template.js", function(exports, require, module){
-module.exports = '<div>\n  <div class="row" ng-show="deletemode" style="padding:20px;">\n    Are you sure?<br /><br />\n\n    <button class="btn btn-info" ng-click="canceldelete()">No Cancel</button>\n    <button class="btn btn-danger" ng-click="deletecontainer(true)">Yes! Delete</button>\n  </div>\n\n  <div ng-hide="deletemode">\n    <ul class="nav nav-tabs" id="viewerTab">\n      \n      <li ng-show="showchildren" ng-class="{active:tabmode==\'children\'}"><a style="cursor:pointer;" ng-click="setmode(\'children\')">Children</a></li>\n      <li ng-show="showdetails" ng-class="{active:tabmode==\'details\'}"><a style="cursor:pointer;" ng-click="setmode(\'details\')">Data</a></li>\n      <li ng-repeat="tab in blueprint.tabs" ng-class="{active:tabmode==tab.name}"><a style="cursor:pointer;" ng-click="setmode(tab.name)">{{ tab.name | ucfirst }}</a></li>\n      \n      <li ng-show="settings.showdigger && !issupplychain" ng-class="{active:tabmode==\'digger\'}"><a style="cursor:pointer;" ng-click="setmode(\'digger\')">Digger</a></li>\n      <li ng-show="settings.showjson" ng-class="{active:tabmode==\'json\'}"><a style="cursor:pointer;" ng-click="setmode(\'json\')">JSON</a></li>\n    </ul>\n\n    <!--\n      nav pills\n     -->\n    <div class="row" style="border-bottom:1px dotted #e5e5e5;margin-bottom:10px;" ng-if="!settings.readonly && (tabmode!=\'children\')">\n      <ul class="nav nav-pills">\n        <li ng-show="edit_container.tag()!=\'_supplychain\' && settings.showup && !addmode">\n          <a href="" ng-click="selectparent()">up</a>\n        </li>\n        <li ng-show="addmode || settings.cancelbutton">\n          <a href="" ng-click="cancelcontainer()">cancel</a>\n        </li>\n        <li ng-hide="hidedelete()">\n          <a href="" ng-click="deletecontainer()">delete</a>\n        </li>\n        <li ng-hide="edit_container.tag()==\'_supplychain\' || haserror()">\n          <a href="" ng-click="savecontainer()">save</a>\n        </li>\n      </ul>\n    </div>\n\n    <div id="myTabContent" class="tab-content">\n      <!--\n        children\n       -->\n      <div ng-show="showchildren" ng-class="{active:tabmode==\'children\', in:tabmode==\'children\', fade:tabmode!=\'children\'}" class="tab-pane" id="children">\n\n        <div class="row" ng-hide="settings.readonly" style="border-bottom:1px dotted #e5e5e5;margin-bottom:10px;">\n          <div class="col-sm-12">\n\n            <!--\n              <div ng-repeat="blueprint in addchildren" style="margin-bottom:5px;">\n                <button style="width:100%;" class="btn btn-sm btn-info" ng-click="add_from_blueprint(blueprint)">new {{ blueprint.title() }}</button>\n              </div>\n              <div ng-repeat="button in settings.buttons" style="margin-bottom:5px;">\n                <button style="width:100%;" ng-hide="settings.hidebuttonfn(button)" ng-class="\'btn btn-sm \' + button.class" ng-click="settings_button_clicked(button)">{{ button.title }}</button>\n              </div>\n            -->\n\n            <ul class="nav nav-pills">\n\n              <li class="dropdown">\n                <a class="dropdown-toggle" data-toggle="dropdown" href="#">\n                  new <span class="caret"></span>\n                </a>\n                <ul class="dropdown-menu" role="menu">\n                  <li ng-repeat="blueprint in addchildren"><a href="" ng-click="add_from_blueprint(blueprint)">{{ blueprint.title() }}</a></li>\n                </ul>\n              </li>\n              <li ng-repeat="button in settings.buttons" ng-hide="settings.hidebuttonfn(button)" >\n                <a href="" ng-click="settings_button_clicked(button)">{{ button.title }}</a>\n              </li>\n              <li ng-show="edit_container.tag()!=\'_supplychain\' && settings.showup && !addmode">\n                <a href="" ng-click="selectparent()">up</a>\n              </li>\n              \n            </ul>\n\n          </div>\n        </div>\n\n        <div class="row">\n          <div class="col-sm-12">\n\n            <!--\n              CHILDREN LOOP\n             -->\n            <div class="digger-viewer-container" ng-class="{selected:$digger.data(\'selected\')}" ng-repeat="$digger in children | viewersort" ng-click="click_container($digger)" ng-dblclick="click_container($digger, true)">\n\n              <div style="margin-bottom:5px;">\n                <i class="fa icon" ng-class="geticon($digger)"></i>\n              </div>\n              <div>\n                {{ $digger.title() }}\n              </div>\n\n            </div>\n\n          </div>\n        </div>\n      </div>\n\n\n      <!--\n        details\n       -->\n      <div ng-show="showdetails" ng-class="{active:tabmode==\'details\', in:tabmode==\'details\', fade:tabmode!=\'details\'}" class="tab-pane" id="details" style="margin-top:20px;">\n         <form class="form form-horizontal" name="containerForm" onSubmit="return false;" ng-hide="deletemode">\n\n            <fieldset>\n              \n                <form novalidate>\n                  <digger-form showedit="settings.showedit" readonly="{{ settings.readonly }}" fieldclass="{{ settings.fieldclass }}" fields="blueprint.fields" container="edit_container" />\n                </form>\n              \n            </fieldset>\n\n          </form>\n\n\n        \n\n\n        \n\n      </div>\n\n\n      <!--\n        Digger\n       -->\n      <div ng-show="settings.showdigger && !issupplychain" ng-class="{active:tabmode==\'digger\', in:tabmode==\'digger\', fade:tabmode!=\'digger\'}" class="tab-pane" id="digger" style="margin-top:20px;">\n\n\n\n        <form novalidate>\n          <digger-form readonly="{{ settings.readonly }}" fieldclass="{{ settings.fieldclass }}" fields="digger_fields" container="edit_container" />\n        </form>\n\n        <hr ng-show="(settings.container_url || settings.container_branch)" />\n        \n        <div class="row" ng-show="(issaved && settings.container_url)">\n          <form class="form form-horizontal">\n          <div class="form-group">\n            <label for="warehouselink" class="col-sm-2 control-label ng-binding">REST URL:</label>\n            <div class="col-sm-6" style="overflow:none;">\n              <input type="text" readonly class="form-control" id="containerurl" ng-model="container_url" />\n            </div>\n            <div class="col-sm-3">\n              <!--<a ng-href="{{ container_url }}" target="_blank" class="btn btn-info">open</a>-->\n              <button ng-click="selectcontainerurl()" href="" class="btn btn-info">select</a>\n            </div>\n          </div>\n          </form>\n        </div>\n\n        <div class="row" ng-show="(issaved && settings.container_branch)">\n          <form class="form form-horizontal">\n          <div class="form-group">\n            <label for="warehouselink" class="col-sm-2 control-label ng-binding">Branch URL:</label>\n            <div class="col-sm-6" style="overflow:none;">\n              <input id="branchurl" type="text" readonly class="form-control" ng-model="container_branch" />\n            </div>\n            <div class="col-sm-3">\n              <button ng-click="selectbranchurl()" href="" class="btn btn-info">select</a>\n            </div>\n          </div>\n          </form>\n        </div>\n\n      </div>\n\n      <!--\n        JSON\n       -->\n      <div ng-show="settings.showjson" ng-class="{active:tabmode==\'json\', in:tabmode==\'json\', fade:tabmode!=\'json\'}" class="tab-pane" id="json" style="margin-top:20px;">\n\n        <digger-json container="container" />\n\n      </div>\n\n\n\n      <!--\n        tabs\n       -->\n      <div ng-repeat="tab in blueprint.tabs" ng-show="tabmode==tab.name" ng-class="{active:tabmode==tab.name, in:tabmode==tab.name, fade:tabmode!=tab.name}" class="tab-pane" id="{{ tab.name }}" style="margin-top:20px;">\n\n        <div ng-if="!tab.type">\n          <form novalidate>\n            <digger-form readonly="{{ settings.readonly }}" fields="tab.fields" container="edit_container" />\n          </form>\n        </div>\n        <div ng-if="tab.type">\n          <digger-field readonly="settings.readonly" field="tab" container="edit_container" />\n        </div>\n        \n\n      </div>\n\n    </div>\n\n  </div>\n</div>';
+module.exports = '<div>\n  <div class="row" ng-show="deletemode" style="padding:20px;">\n    Are you sure?<br /><br />\n\n    <button class="btn btn-info" ng-click="canceldelete()">No Cancel</button>\n    <button class="btn btn-danger" ng-click="deletecontainer(true)">Yes! Delete</button>\n  </div>\n\n  <div ng-hide="deletemode">\n    <ul class="nav nav-tabs" id="viewerTab">\n      \n      <li ng-show="showchildren" ng-class="{active:tabmode==\'children\'}"><a style="cursor:pointer;" ng-click="setmode(\'children\')">Children</a></li>\n      <li ng-show="showdetails" ng-class="{active:tabmode==\'details\'}"><a style="cursor:pointer;" ng-click="setmode(\'details\')">Data</a></li>\n      <li ng-repeat="tab in blueprint.tabs" ng-class="{active:tabmode==tab.name}"><a style="cursor:pointer;" ng-click="setmode(tab.name)">{{ tab.name | ucfirst }}</a></li>\n      \n      <li ng-show="settings.showdigger && !issupplychain" ng-class="{active:tabmode==\'digger\'}"><a style="cursor:pointer;" ng-click="setmode(\'digger\')">Digger</a></li>\n      <li ng-show="settings.showjson" ng-class="{active:tabmode==\'json\'}"><a style="cursor:pointer;" ng-click="setmode(\'json\')">JSON</a></li>\n    </ul>\n\n    <!--\n      nav pills\n     -->\n    <div class="row" style="border-bottom:1px dotted #e5e5e5;margin-bottom:10px;" ng-if="!settings.readonly && (tabmode!=\'children\')">\n      <ul class="nav nav-pills">\n        <li ng-show="edit_container.tag()!=\'_supplychain\' && settings.showup && !addmode">\n          <a href="" ng-click="selectparent()">up</a>\n        </li>\n        <li ng-show="addmode || settings.cancelbutton">\n          <a href="" ng-click="cancelcontainer()">cancel</a>\n        </li>\n        <li ng-hide="hidedelete()">\n          <a href="" ng-click="deletecontainer()">delete</a>\n        </li>\n        <li ng-hide="edit_container.tag()==\'_supplychain\' || haserror()">\n          <a href="" ng-click="savecontainer()">save</a>\n        </li>\n      </ul>\n    </div>\n\n    <div id="myTabContent" class="tab-content">\n      <!--\n        children\n       -->\n      <div ng-show="showchildren" ng-class="{active:tabmode==\'children\', in:tabmode==\'children\', fade:tabmode!=\'children\'}" class="tab-pane" id="children">\n\n        <div class="row" ng-hide="settings.readonly" style="border-bottom:1px dotted #e5e5e5;margin-bottom:10px;">\n          <div class="col-sm-12">\n\n            <!--\n              <div ng-repeat="blueprint in addchildren" style="margin-bottom:5px;">\n                <button style="width:100%;" class="btn btn-sm btn-info" ng-click="add_from_blueprint(blueprint)">new {{ blueprint.title() }}</button>\n              </div>\n              <div ng-repeat="button in settings.buttons" style="margin-bottom:5px;">\n                <button style="width:100%;" ng-hide="settings.hidebuttonfn(button)" ng-class="\'btn btn-sm \' + button.class" ng-click="settings_button_clicked(button)">{{ button.title }}</button>\n              </div>\n            -->\n\n            <ul class="nav nav-pills">\n              <li class="dropdown">\n                <a class="dropdown-toggle" data-toggle="dropdown" href="#">\n                  view <span class="caret"></span>\n                </a>\n                <ul class="dropdown-menu" role="menu">\n                  <li><a href="" ng-click="settings.view=\'icons\'">icons</a></li>\n                  <li><a href="" ng-click="settings.view=\'details\'">details</a></li>\n                </ul>\n              </li>\n              <li class="dropdown">\n                <a class="dropdown-toggle" data-toggle="dropdown" href="#">\n                  new <span class="caret"></span>\n                </a>\n                <ul class="dropdown-menu" role="menu">\n                  <li ng-repeat="blueprint in addchildren"><a href="" ng-click="add_from_blueprint(blueprint)">{{ blueprint.title() }}</a></li>\n                </ul>\n              </li>\n              <li ng-repeat="button in settings.buttons" ng-hide="settings.hidebuttonfn(button)" >\n                <a href="" ng-click="settings_button_clicked(button)">{{ button.title }}</a>\n              </li>\n              <li ng-show="edit_container.tag()!=\'_supplychain\' && settings.showup && !addmode">\n                <a href="" ng-click="selectparent()">up</a>\n              </li>\n              \n            </ul>\n\n          </div>\n        </div>\n\n        <div class="row">\n          <div class="col-sm-12">\n\n            <!--\n              CHILDREN LOOP\n             -->\n\n             <div ng-if="settings.view==\'details\'">\n               <table class="table table-striped">\n                  <tbody>\n                    <tr class="viewer-details-row" ng-repeat="$digger in children | viewersort" ng-click="click_container($digger)">\n                      <td>\n                        <i class="fa icon digger-details-icon" ng-class="geticon($digger)"></i>\n                      </td>\n                      <td>\n                        {{ $digger.title() }}\n                      </td>\n                      <td>\n                        <small>{{ tag_summary($digger) }}</small>\n                      </td>\n                      <td>\n                        <small>{{ class_summary($digger) }}</small>\n                      </td>\n                      <td>\n                        <small>{{ id_summary($digger) }}</small>\n                      </td>\n                    </tr>\n                  </tbody>\n                </table>\n              </div>\n              <div ng-if="settings.view==\'icons\'">\n                <div class="digger-viewer-container" ng-class="{selected:$digger.data(\'selected\')}" ng-repeat="$digger in children | viewersort" ng-click="click_container($digger)" ng-dblclick="click_container($digger, true)">\n\n                  <div style="margin-bottom:5px;">\n                    <i class="fa icon viewer-icon" ng-class="geticon($digger)"></i>\n                  </div>\n                  <div>\n                    {{ $digger.title() }}\n                  </div>\n\n                </div>\n              </div>\n\n\n          </div>\n        </div>\n      </div>\n\n\n      <!--\n        details\n       -->\n      <div ng-show="showdetails" ng-class="{active:tabmode==\'details\', in:tabmode==\'details\', fade:tabmode!=\'details\'}" class="tab-pane" id="details" style="margin-top:20px;">\n         <form class="form form-horizontal" name="containerForm" onSubmit="return false;" ng-hide="deletemode">\n\n            <fieldset>\n              \n                <form novalidate>\n                  <digger-form showedit="settings.showedit" readonly="{{ settings.readonly }}" fieldclass="{{ settings.fieldclass }}" fields="blueprint.fields" container="edit_container" />\n                </form>\n              \n            </fieldset>\n\n          </form>\n\n\n        \n\n\n        \n\n      </div>\n\n\n      <!--\n        Digger\n       -->\n      <div ng-show="settings.showdigger && !issupplychain" ng-class="{active:tabmode==\'digger\', in:tabmode==\'digger\', fade:tabmode!=\'digger\'}" class="tab-pane" id="digger" style="margin-top:20px;">\n\n\n\n        <form novalidate>\n          <digger-form readonly="{{ settings.readonly }}" fieldclass="{{ settings.fieldclass }}" fields="digger_fields" container="edit_container" />\n        </form>\n\n        <hr ng-show="(settings.container_url || settings.container_branch)" />\n        \n        <div class="row" ng-show="(issaved && settings.container_url)">\n          <form class="form form-horizontal">\n          <div class="form-group">\n            <label for="warehouselink" class="col-sm-2 control-label ng-binding">REST URL:</label>\n            <div class="col-sm-6" style="overflow:none;">\n              <input type="text" readonly class="form-control" id="containerurl" ng-model="container_url" />\n            </div>\n            <div class="col-sm-3">\n              <!--<a ng-href="{{ container_url }}" target="_blank" class="btn btn-info">open</a>-->\n              <button ng-click="selectcontainerurl()" href="" class="btn btn-info">select</a>\n            </div>\n          </div>\n          </form>\n        </div>\n\n        <div class="row" ng-show="(issaved && settings.container_branch)">\n          <form class="form form-horizontal">\n          <div class="form-group">\n            <label for="warehouselink" class="col-sm-2 control-label ng-binding">Branch URL:</label>\n            <div class="col-sm-6" style="overflow:none;">\n              <input id="branchurl" type="text" readonly class="form-control" ng-model="container_branch" />\n            </div>\n            <div class="col-sm-3">\n              <button ng-click="selectbranchurl()" href="" class="btn btn-info">select</a>\n            </div>\n          </div>\n          </form>\n        </div>\n\n      </div>\n\n      <!--\n        JSON\n       -->\n      <div ng-show="settings.showjson" ng-class="{active:tabmode==\'json\', in:tabmode==\'json\', fade:tabmode!=\'json\'}" class="tab-pane" id="json" style="margin-top:20px;">\n\n        <digger-json container="container" />\n\n      </div>\n\n\n\n      <!--\n        tabs\n       -->\n      <div ng-repeat="tab in blueprint.tabs" ng-show="tabmode==tab.name" ng-class="{active:tabmode==tab.name, in:tabmode==tab.name, fade:tabmode!=tab.name}" class="tab-pane" id="{{ tab.name }}" style="margin-top:20px;">\n\n        <div ng-if="!tab.type">\n          <form novalidate>\n            <digger-form readonly="{{ settings.readonly }}" fields="tab.fields" container="edit_container" />\n          </form>\n        </div>\n        <div ng-if="tab.type">\n          <digger-field readonly="settings.readonly" field="tab" container="edit_container" />\n        </div>\n        \n\n      </div>\n\n    </div>\n\n  </div>\n</div>';
 });
 require.register("binocarlos-digger-viewer-for-angular/jsonviewer.js", function(exports, require, module){
 module.exports = '<div id="htmlholder" style="width:100%;" ng-bind-html="jsonhtml">\n</div>';
