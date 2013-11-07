@@ -680,8 +680,6 @@ angular
       radio.bind();
 
       radio.on('radio:event', function(packet){
-        console.log('-------------------------------------------');
-        console.log('YO');
         $safeApply($scope, function(){
           $scope.$emit('radio:event', packet);
         })

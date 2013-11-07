@@ -4158,22 +4158,25 @@ module.exports.container_wrapper = function(radio, container){
         }
 
         var to_append = $digger.create(packet.body);
+        var appended_count = 0;
 
         to_append.each(function(append){
           var check = target.find('=' + append.diggerid());
           if(check.count()<=0){
-          	console.log('-------------------------------------------');
-          	console.log('appending');
             target.append(append);
+            appended_count++;
           }
         })
 
-        wrapper.emit('radio:event', {
-          action:'append',
-          user:user,
-          target:target,
-          data:to_append
-        })
+        if(appended_count>0){
+        	wrapper.emit('radio:event', {
+	          action:'append',
+	          user:user,
+	          target:target,
+	          data:to_append
+	        })	
+        }
+        
       }
       else if(packet.action=='save'){
         var target_id = packet.body._digger.diggerid;
@@ -4438,6 +4441,9 @@ module.exports = function(){
 	    return blueprints[name];
 	  },
 	  all_containers:function(visible){
+	  	if(!holder){
+	  		return [];
+	  	}
 	  	return holder.containers().filter(function(blueprint){
 	  		if(!visible){
 	  			return true;

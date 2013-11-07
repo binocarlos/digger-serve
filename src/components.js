@@ -102,6 +102,8 @@ module.exports = function(appconfig){
               
             }, function(error, stdout, stderr){
 
+              console.log('-------------------------------------------');
+              console.dir(error);
               if(error){
                 res.statusCode = 500;
                 res.send(error);
