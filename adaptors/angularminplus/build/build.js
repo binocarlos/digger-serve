@@ -17531,7 +17531,6 @@ require.register("binocarlos-digger-supplychain-for-angular/index.js", function(
   
 */
 require('digger-utils-for-angular');
-
 angular
   .module('digger.supplychain', [
     'digger.utils'
@@ -17561,6 +17560,10 @@ angular
     return function($scope){
 
       return function(selector, warehousepath){
+
+        console.log('-------------------------------------------');
+        console.dir(selector);
+        console.dir(warehousepath);
           
         if(!selector){
           return;
@@ -17638,6 +17641,8 @@ angular
       priority: 1000,
       scope:true,
       link:function($scope, elem, $attrs){
+        console.log('-------------------------------------------');
+        console.log('digger');
         var loader = $warehouseLoader($scope);
 
         $scope.$on('digger:reload', function(){
@@ -17674,7 +17679,6 @@ angular
 
       $scope.$on('$destroy', cleanup);
       
-      console.dir(container.toJSON());
       radio = container.radio();
       radio.bind();
 
