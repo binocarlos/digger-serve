@@ -4127,11 +4127,13 @@ module.exports.container_wrapper = function(radio, container){
 		}
 		
 		channel = get_channel(channel);
+    channel += '.' + packet.action;
 		return radio.talk(channel, packet);
 	}
 
 	wrapper.listen = function(channel, fn){
 		channel = get_channel(channel);
+    console.log('list: ' + channel);
 		return radio.listen(channel, fn);
 	}
 
@@ -4471,7 +4473,9 @@ module.exports = function(){
 					leaf:blueprint.attr('leaf'),
 					blueprint:blueprint.attr('name'),
 					tag:blueprint.attr('tag') || blueprint.attr('name'),
-					class:blueprint.digger('class') || [],
+					class:(blueprint.digger('class') || []).filter(function(c){
+						return (c || '').match(/\w/);
+					}),
 					icon:blueprint.attr('icon')
 				}
 			} : {}

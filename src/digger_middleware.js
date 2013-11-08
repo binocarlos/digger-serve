@@ -221,6 +221,7 @@ module.exports = function(config){
   	};
 
   	parts.forEach(function(part){
+      part = part.replace(/^\//, '');
   		if(features[part]!=undefined){
   			features[part] = true;
   		}

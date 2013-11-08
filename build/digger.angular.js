@@ -251,6 +251,8 @@ angular
 
         var warehouse = $rootScope.warehouse;
 
+        warehousepath = warehousepath || $scope.warehousepath;
+
         if(warehousepath){
           warehouse = $digger.connect(warehousepath);
         }
@@ -279,6 +281,31 @@ angular
     }
   })
 
+    /*
+  
+    a generic trigger for the warehouse loader above
+    
+  */
+  .directive('warehouse', function($warehouseLoader, $safeApply){
+    return {
+      restrict:'A',
+      // we want this going before even the repeat
+      // this lets us put the repeat and digger on the same tag
+      // <div digger warehouse="/" selector="*" digger-repeat="children()" />
+      priority: 1001,
+      scope:true,
+      link:function($scope, elem, $attrs){
+
+        $attrs.$observe('warehouse', function(warehousepath){
+          if(!warehousepath.match(/^\//)){
+            warehousepath = '/' + warehousepath;
+          }
+          $scope.warehousepath = warehousepath;
+          $scope.warehouse = $digger.connect(warehousepath);
+        })
+      }
+    }
+  })
 
   /*
   
@@ -329,7 +356,8 @@ angular
       }
 
       $scope.$on('$destroy', cleanup);
-        
+      
+      console.dir(container.toJSON());
       radio = container.radio();
       radio.bind();
 
@@ -604,6 +632,25 @@ angular
     }
   })
 
+  .directive('diggerTickField', function($compile, $safeApply){
+    return {
+      restrict:'A',
+      link:function($scope){
+
+        $scope.classtick = $scope.container.hasClass($scope.fieldname);
+        $scope.$watch('classtick', function(val){
+          if(val){
+            $scope.container.addClass($scope.fieldname);
+          }
+          else{
+            $scope.container.removeClass($scope.fieldname); 
+          }
+        });
+
+      }
+    }
+  })
+
   .factory('$digger_fields', function($safeApply){
 
     return [{
@@ -643,6 +690,7 @@ angular
       email:true,
       textarea:true,
       diggerclass:true,
+      classtick:true,
       diggericon:true,
       template:true,
       checkbox:true,
@@ -1094,16 +1142,16 @@ angular
   })
 });
 require.register("binocarlos-digger-form-for-angular/form.js", function(exports, require, module){
-module.exports = ' \n<div ng-form="diggerForm" class="form-horizontal">\n  <div class="form-group" ng-repeat="field in fields" ng-class="{\'has-error\': container.data(\'error.\' + field.name)}">\n    <label ng-if="field.label!=false" for="{{ field.name }}" class="control-label col-lg-4">{{ field.usetitle | fieldtitle | ucfirst }}</label>\n    <div ng-class="{\'col-lg-7\':field.label!=false,\'col-lg-11\':field.label==false}">\n      <digger-field readonly="readonly" field="field" container="container" fieldclass="fieldclass" />\n    </div>\n    \n    <div class="col-sm-1" ng-show="showedit">\n      <a href="#" class="btn btn-sm btn-warning" ng-click="$emit(\'deletefield\', field)">\n          <i class="fa fa-trash-o"></i>\n      </a>\n    </div>\n    \n  </div>\n  <div ng-transclude></div>\n</div>';
+module.exports = ' \n<div ng-form="diggerForm" class="form-horizontal">\n  <div class="form-group" ng-repeat="field in fields" ng-class="{\'has-error\': container.data(\'error.\' + field.name)}">\n    <label ng-if="field.label!=false" for="{{ field.name }}" class="control-label col-lg-4">{{ field.usetitle | fieldtitle | ucfirst }}</label>\n    <div ng-class="{\'col-sm-7\':field.label!=false,\'col-sm-11\':field.label==false}">\n      <digger-field readonly="readonly" field="field" container="container" fieldclass="fieldclass" />\n    </div>\n    \n    <div class="col-sm-1" ng-show="showedit">\n      <a href="#" class="btn btn-sm btn-warning" ng-click="$emit(\'deletefield\', field)">\n          <i class="fa fa-trash-o"></i>\n      </a>\n    </div>\n    \n  </div>\n  <div ng-transclude></div>\n</div>';
 });
 require.register("binocarlos-digger-form-for-angular/field.js", function(exports, require, module){
 module.exports = '<div>\n	<div ng-if="!field.list">\n		<digger-field-render readonly="readonly" field="field" container="container" model="model" fieldname="fieldname" />\n	</div>\n	<div ng-if="field.list">\n		<digger-list-render readonly="readonly" field="field" container="container" model="model" fieldname="fieldname" />\n	</div>\n</div>';
 });
 require.register("binocarlos-digger-form-for-angular/list.js", function(exports, require, module){
-module.exports = '<div class="well">\n\n	<div ng-repeat="item in list track by $id(item)" style="margin-top:5px;">\n		<div class="row">\n			<div class="col-sm-10">\n				<digger-field-render readonly="readonly" field="field" container="container" model="item" fieldname="usefieldname" />\n			</div>\n			<div class="col-sm-2">\n\n				<button class="btn btn-xs" ng-class="{\'digger-form-invis\':$first}" ng-click="moverow($index, -1)">\n				 	<i title="Up" class="icon-sort-up icon-white"></i>\n				</button>\n\n				<button class="btn btn-xs" ng-click="deleterow($index);">\n				 	<i title="Delete" class="icon-trash icon-white"></i>\n				</button>\n\n				<button class="btn btn-xs" ng-class="{\'digger-form-invis\':$last}" ng-click="moverow($index, 1)">\n				 	<i title="Down" class="icon-sort-down icon-white"></i>\n				</button>\n\n			</div>\n		</div>\n	</div>\n\n	<button class="btn btn-info btn-sm" ng-click="addrow()" style="margin-top:10px;">\n	 	add\n	</button>\n\n</div>';
+module.exports = '<div class="well">\n\n	<div ng-repeat="item in list track by $id(item)" style="margin-top:5px;">\n		<div class="row">\n			<div class="col-sm-10">\n				<digger-field-render readonly="readonly" field="field" container="container" model="item" fieldname="usefieldname" />\n			</div>\n			<div class="col-sm-2">\n\n				<button class="btn btn-xs" ng-class="{\'digger-form-invis\':$first}" ng-click="moverow($index, -1)">\n				 	<i title="Up" class="fa fa-sort-desc icon-white"></i>\n				</button>\n\n				<button class="btn btn-xs" ng-click="deleterow($index);">\n				 	<i title="Delete" class="fa fa-trash-o icon-white"></i>\n				</button>\n\n				<button class="btn btn-xs" ng-class="{\'digger-form-invis\':$last}" ng-click="moverow($index, 1)">\n				 	<i title="Down" class="fa fa-sort-asc icon-white"></i>\n				</button>\n\n			</div>\n		</div>\n	</div>\n\n	<button class="btn btn-info btn-sm" ng-click="addrow()" style="margin-top:10px;">\n	 	add\n	</button>\n\n</div>';
 });
 require.register("binocarlos-digger-form-for-angular/fieldrender.js", function(exports, require, module){
-module.exports = '<div ng-switch="fieldtype">\n	<div ng-switch-when="textarea">\n		<textarea style="min-height:200px;width:100%;" name="{{ field.name }}" class="form-control" ng-readonly="{{ readonly }}" ng-model="model[fieldname]"></textarea>\n	</div>\n	<div ng-switch-when="template">\n		\n	</div>\n	<div ng-switch-when="component">\n		<digger-component name="rendercomponent" fieldname="fieldname" field="field" model="model" container="container" readonly="readonly" />\n	</div>\n\n	<div ng-switch-when="diggerclass">\n		<input name="{{ field.name }}" digger-class-field class="form-control {{ fieldclass || \'input\' }}" type="text" ng-model="classval" ng-readonly="{{ readonly }}" />\n	</div>\n\n	<div ng-switch-when="diggericon">\n\n		<div class="row">\n			<div class="col-sm-6">\n				<input name="{{ field.name }}" placeholder="fa-folder" class="form-control {{ fieldclass || \'input\' }}" type="text" ng-model="model[fieldname]"  ng-minlength="field.minlength" ng-maxlength="field.maxlength" ng-readonly="{{ readonly }}" ng-pattern="pattern" />\n			</div>\n			<div class="col-sm-6">\n				<a href="http://fortawesome.github.io/Font-Awesome/icons/" target="_blank" class="btn btn-info">icon list</a>\n			</div>\n		</div>\n		\n	</div>\n\n	<div ng-switch-when="radio">\n		<span ng-repeat="option in options">\n			<input type="radio"\n				ng-readonly="{{ readonly }}" \n	       ng-model="model[fieldname]"\n	       value="{{option}}" /> <small>{{ option }}</small> &nbsp;\n	  </span>\n\n	</div>\n	<div ng-switch-when="select">\n\n		<select \n			class="form-control" \n			ng-disabled="{{ readonly }}"\n			ng-model="model[fieldname]" \n			ng-options="o for o in options"></select>\n\n	  \n	</div>\n	<div ng-switch-when="checkbox">\n\n		<input ng-readonly="{{ readonly }}" type="checkbox" ng-model="model[fieldname]" />\n		\n	</div>\n	<div ng-switch-when="text">\n		<!--<input name="{{ field.name }}" class="form-control {{ fieldclass || \'input\' }}" type="text" ng-model="model[fieldname]"  ng-minlength="field.minlength" ng-maxlength="field.maxlength" ng-readonly="readonly" ng-pattern="pattern" />-->\n		<input name="{{ field.name }}" class="form-control {{ fieldclass || \'input\' }}" type="text" ng-model="model[fieldname]" ng-readonly="{{ readonly }}"  />\n	</div>\n	<div ng-switch-when="email">\n		<input name="{{ field.name }}" class="form-control {{ fieldclass || \'input\' }}" type="email" ng-model="model[fieldname]" ng-readonly="{{ readonly }}"  />\n	</div>\n	<div ng-switch-when="url">\n		<input name="{{ field.name }}" class="form-control {{ fieldclass || \'input\' }}" type="url" ng-model="model[fieldname]" ng-readonly="{{ readonly }}"  />\n	</div>	\n	<div ng-switch-when="number">\n		<input id="{{ field.name }}" name="{{ field.name }}" class="form-control {{ fieldclass || \'input\' }}" type="number" ng-model="model[fieldname]" ng-readonly="{{ readonly }}" />\n	</div>\n</div>';
+module.exports = '<div ng-switch="fieldtype">\n	<div ng-switch-when="textarea">\n		<textarea style="min-height:200px;width:100%;" name="{{ field.name }}" class="form-control" ng-readonly="{{ readonly }}" ng-model="model[fieldname]"></textarea>\n	</div>\n	<div ng-switch-when="template">\n		\n	</div>\n	<div ng-switch-when="component">\n		<digger-component name="rendercomponent" fieldname="fieldname" field="field" model="model" container="container" readonly="readonly" />\n	</div>\n\n	<div ng-switch-when="diggerclass">\n		<input name="{{ field.name }}" digger-class-field class="form-control {{ fieldclass || \'input\' }}" type="text" ng-model="classval" ng-readonly="{{ readonly }}" />\n	</div>\n\n	<div ng-switch-when="classtick">\n\n		<input  ng-disabled="{{ readonly }}" type="checkbox" digger-tick-field ng-model="classtick" />\n\n	</div>\n\n	<div ng-switch-when="diggericon">\n\n		<div class="row">\n			<div class="col-sm-6">\n				<input name="{{ field.name }}" placeholder="fa-folder" class="form-control {{ fieldclass || \'input\' }}" type="text" ng-model="model[fieldname]"  ng-minlength="field.minlength" ng-maxlength="field.maxlength" ng-readonly="{{ readonly }}" ng-pattern="pattern" />\n			</div>\n			<div class="col-sm-6">\n				<a href="http://fortawesome.github.io/Font-Awesome/icons/" target="_blank" class="btn btn-info">icon list</a>\n			</div>\n		</div>\n		\n	</div>\n\n	<div ng-switch-when="radio">\n		<span ng-repeat="option in options">\n			<input type="radio"\n				ng-disabled="{{ readonly }}" \n	       ng-model="model[fieldname]"\n	       value="{{option}}" /> <small>{{ option }}</small> &nbsp;\n	  </span>\n\n	</div>\n	<div ng-switch-when="select">\n\n		<select \n			class="form-control" \n			ng-disabled="{{ readonly }}"\n			ng-model="model[fieldname]" \n			ng-options="o for o in options"></select>\n\n	  \n	</div>\n	<div ng-switch-when="checkbox">\n\n		<input ng-disabled="{{ readonly }}" type="checkbox" ng-model="model[fieldname]" />\n		\n	</div>\n	<div ng-switch-when="text">\n		<!--<input name="{{ field.name }}" class="form-control {{ fieldclass || \'input\' }}" type="text" ng-model="model[fieldname]"  ng-minlength="field.minlength" ng-maxlength="field.maxlength" ng-readonly="readonly" ng-pattern="pattern" />-->\n		<input name="{{ field.name }}" class="form-control {{ fieldclass || \'input\' }}" type="text" ng-model="model[fieldname]" ng-readonly="{{ readonly }}"  />\n	</div>\n	<div ng-switch-when="email">\n		<input name="{{ field.name }}" class="form-control {{ fieldclass || \'input\' }}" type="email" ng-model="model[fieldname]" ng-readonly="{{ readonly }}"  />\n	</div>\n	<div ng-switch-when="url">\n		<input name="{{ field.name }}" class="form-control {{ fieldclass || \'input\' }}" type="url" ng-model="model[fieldname]" ng-readonly="{{ readonly }}"  />\n	</div>	\n	<div ng-switch-when="number">\n		<input id="{{ field.name }}" name="{{ field.name }}" class="form-control {{ fieldclass || \'input\' }}" type="number" ng-model="model[fieldname]" ng-readonly="{{ readonly }}" />\n	</div>\n</div>';
 });
 require.register("binocarlos-digger-repeat-for-angular/index.js", function(exports, require, module){
 /*
@@ -1962,7 +2010,7 @@ angular
   })
 });
 require.register("binocarlos-digger-viewer-for-angular/template.js", function(exports, require, module){
-module.exports = '<div>\n  <div class="row" ng-show="deletemode" style="padding:20px;">\n    Are you sure?<br /><br />\n\n    <button class="btn btn-info" ng-click="canceldelete()">No Cancel</button>\n    <button class="btn btn-danger" ng-click="deletecontainer(true)">Yes! Delete</button>\n  </div>\n\n  <div ng-hide="deletemode">\n    <ul class="nav nav-tabs" id="viewerTab">\n      \n      <li ng-show="showchildren" ng-class="{active:tabmode==\'children\'}"><a style="cursor:pointer;" ng-click="setmode(\'children\')">Children</a></li>\n      <li ng-show="showdetails" ng-class="{active:tabmode==\'details\'}"><a style="cursor:pointer;" ng-click="setmode(\'details\')">Data</a></li>\n      <li ng-repeat="tab in blueprint.tabs" ng-class="{active:tabmode==tab.name}"><a style="cursor:pointer;" ng-click="setmode(tab.name)">{{ tab.name | ucfirst }}</a></li>\n      \n      <li ng-show="settings.showdigger && !issupplychain" ng-class="{active:tabmode==\'digger\'}"><a style="cursor:pointer;" ng-click="setmode(\'digger\')">Digger</a></li>\n      <li ng-show="settings.showjson" ng-class="{active:tabmode==\'json\'}"><a style="cursor:pointer;" ng-click="setmode(\'json\')">JSON</a></li>\n    </ul>\n\n    <!--\n      nav pills\n     -->\n    <div class="row" style="border-bottom:1px dotted #e5e5e5;margin-bottom:10px;" ng-if="!settings.readonly && (tabmode!=\'children\')">\n      <ul class="nav nav-pills">\n        <li ng-show="edit_container.tag()!=\'_supplychain\' && settings.showup && !addmode">\n          <a href="" ng-click="selectparent()">up</a>\n        </li>\n        <li ng-show="addmode || settings.cancelbutton">\n          <a href="" ng-click="cancelcontainer()">cancel</a>\n        </li>\n        <li ng-hide="hidedelete()">\n          <a href="" ng-click="deletecontainer()">delete</a>\n        </li>\n        <li ng-hide="edit_container.tag()==\'_supplychain\' || haserror()">\n          <a href="" ng-click="savecontainer()">save</a>\n        </li>\n      </ul>\n    </div>\n\n    <div id="myTabContent" class="tab-content">\n      <!--\n        children\n       -->\n      <div ng-show="showchildren" ng-class="{active:tabmode==\'children\', in:tabmode==\'children\', fade:tabmode!=\'children\'}" class="tab-pane" id="children">\n\n        <div class="row" ng-hide="settings.readonly" style="border-bottom:1px dotted #e5e5e5;margin-bottom:10px;">\n          <div class="col-sm-12">\n\n            <!--\n              <div ng-repeat="blueprint in addchildren" style="margin-bottom:5px;">\n                <button style="width:100%;" class="btn btn-sm btn-info" ng-click="add_from_blueprint(blueprint)">new {{ blueprint.title() }}</button>\n              </div>\n              <div ng-repeat="button in settings.buttons" style="margin-bottom:5px;">\n                <button style="width:100%;" ng-hide="settings.hidebuttonfn(button)" ng-class="\'btn btn-sm \' + button.class" ng-click="settings_button_clicked(button)">{{ button.title }}</button>\n              </div>\n            -->\n\n            <ul class="nav nav-pills">\n              <li class="dropdown">\n                <a class="dropdown-toggle" data-toggle="dropdown" href="#">\n                  view <span class="caret"></span>\n                </a>\n                <ul class="dropdown-menu" role="menu">\n                  <li><a href="" ng-click="settings.view=\'icons\'">icons</a></li>\n                  <li><a href="" ng-click="settings.view=\'details\'">details</a></li>\n                </ul>\n              </li>\n              <li class="dropdown">\n                <a class="dropdown-toggle" data-toggle="dropdown" href="#">\n                  new <span class="caret"></span>\n                </a>\n                <ul class="dropdown-menu" role="menu">\n                  <li ng-repeat="blueprint in addchildren"><a href="" ng-click="add_from_blueprint(blueprint)">{{ blueprint.title() }}</a></li>\n                </ul>\n              </li>\n              <li ng-repeat="button in settings.buttons" ng-hide="settings.hidebuttonfn(button)" >\n                <a href="" ng-click="settings_button_clicked(button)">{{ button.title }}</a>\n              </li>\n              <li ng-show="edit_container.tag()!=\'_supplychain\' && settings.showup && !addmode">\n                <a href="" ng-click="selectparent()">up</a>\n              </li>\n              \n            </ul>\n\n          </div>\n        </div>\n\n        <div class="row">\n          <div class="col-sm-12">\n\n            <!--\n              CHILDREN LOOP\n             -->\n\n             <div ng-if="settings.view==\'details\'">\n               <table class="table table-striped">\n                  <tbody>\n                    <tr class="viewer-details-row" ng-repeat="$digger in children | viewersort" ng-click="click_container($digger)">\n                      <td>\n                        <i class="fa icon digger-details-icon" ng-class="geticon($digger)"></i>\n                      </td>\n                      <td>\n                        {{ $digger.title() }}\n                      </td>\n                      <td>\n                        <small>{{ tag_summary($digger) }}</small>\n                      </td>\n                      <td>\n                        <small>{{ class_summary($digger) }}</small>\n                      </td>\n                      <td>\n                        <small>{{ id_summary($digger) }}</small>\n                      </td>\n                    </tr>\n                  </tbody>\n                </table>\n              </div>\n              <div ng-if="settings.view==\'icons\'">\n                <div class="digger-viewer-container" ng-class="{selected:$digger.data(\'selected\')}" ng-repeat="$digger in children | viewersort" ng-click="click_container($digger)" ng-dblclick="click_container($digger, true)">\n\n                  <div style="margin-bottom:5px;">\n                    <i class="fa icon viewer-icon" ng-class="geticon($digger)"></i>\n                  </div>\n                  <div>\n                    {{ $digger.title() }}\n                  </div>\n\n                </div>\n              </div>\n\n\n          </div>\n        </div>\n      </div>\n\n\n      <!--\n        details\n       -->\n      <div ng-show="showdetails" ng-class="{active:tabmode==\'details\', in:tabmode==\'details\', fade:tabmode!=\'details\'}" class="tab-pane" id="details" style="margin-top:20px;">\n         <form class="form form-horizontal" name="containerForm" onSubmit="return false;" ng-hide="deletemode">\n\n            <fieldset>\n              \n                <form novalidate>\n                  <digger-form showedit="settings.showedit" readonly="{{ settings.readonly }}" fieldclass="{{ settings.fieldclass }}" fields="blueprint.fields" container="edit_container" />\n                </form>\n              \n            </fieldset>\n\n          </form>\n\n\n        \n\n\n        \n\n      </div>\n\n\n      <!--\n        Digger\n       -->\n      <div ng-show="settings.showdigger && !issupplychain" ng-class="{active:tabmode==\'digger\', in:tabmode==\'digger\', fade:tabmode!=\'digger\'}" class="tab-pane" id="digger" style="margin-top:20px;">\n\n\n\n        <form novalidate>\n          <digger-form readonly="{{ settings.readonly }}" fieldclass="{{ settings.fieldclass }}" fields="digger_fields" container="edit_container" />\n        </form>\n\n        <hr ng-show="(settings.container_url || settings.container_branch)" />\n        \n        <div class="row" ng-show="(issaved && settings.container_url)">\n          <form class="form form-horizontal">\n          <div class="form-group">\n            <label for="warehouselink" class="col-sm-2 control-label ng-binding">REST URL:</label>\n            <div class="col-sm-6" style="overflow:none;">\n              <input type="text" readonly class="form-control" id="containerurl" ng-model="container_url" />\n            </div>\n            <div class="col-sm-3">\n              <!--<a ng-href="{{ container_url }}" target="_blank" class="btn btn-info">open</a>-->\n              <button ng-click="selectcontainerurl()" href="" class="btn btn-info">select</a>\n            </div>\n          </div>\n          </form>\n        </div>\n\n        <div class="row" ng-show="(issaved && settings.container_branch)">\n          <form class="form form-horizontal">\n          <div class="form-group">\n            <label for="warehouselink" class="col-sm-2 control-label ng-binding">Branch URL:</label>\n            <div class="col-sm-6" style="overflow:none;">\n              <input id="branchurl" type="text" readonly class="form-control" ng-model="container_branch" />\n            </div>\n            <div class="col-sm-3">\n              <button ng-click="selectbranchurl()" href="" class="btn btn-info">select</a>\n            </div>\n          </div>\n          </form>\n        </div>\n\n      </div>\n\n      <!--\n        JSON\n       -->\n      <div ng-show="settings.showjson" ng-class="{active:tabmode==\'json\', in:tabmode==\'json\', fade:tabmode!=\'json\'}" class="tab-pane" id="json" style="margin-top:20px;">\n\n        <digger-json container="container" />\n\n      </div>\n\n\n\n      <!--\n        tabs\n       -->\n      <div ng-repeat="tab in blueprint.tabs" ng-show="tabmode==tab.name" ng-class="{active:tabmode==tab.name, in:tabmode==tab.name, fade:tabmode!=tab.name}" class="tab-pane" id="{{ tab.name }}" style="margin-top:20px;">\n\n        <div ng-if="!tab.type">\n          <form novalidate>\n            <digger-form readonly="{{ settings.readonly }}" fields="tab.fields" container="edit_container" />\n          </form>\n        </div>\n        <div ng-if="tab.type">\n          <digger-field readonly="settings.readonly" field="tab" container="edit_container" />\n        </div>\n        \n\n      </div>\n\n    </div>\n\n    <div ng-cloak ng-if="tabmode!=\'children\'" class="text-center">\n      <a class="btn btn-warning" ng-hide="hidedelete()" href="" ng-click="deletecontainer()">delete</a>\n      <a class="btn btn-success" ng-hide="edit_container.tag()==\'_supplychain\' || haserror()" href="" ng-click="savecontainer()">save</a>\n    </div>\n  </div>\n</div>';
+module.exports = '<div>\n  <div class="row" ng-show="deletemode" style="padding:20px;">\n    Are you sure?<br /><br />\n\n    <button class="btn btn-info" ng-click="canceldelete()">No Cancel</button>\n    <button class="btn btn-danger" ng-click="deletecontainer(true)">Yes! Delete</button>\n  </div>\n\n  <div ng-hide="deletemode">\n    <ul class="nav nav-tabs" id="viewerTab">\n      \n      <li ng-show="showchildren" ng-class="{active:tabmode==\'children\'}"><a style="cursor:pointer;" ng-click="setmode(\'children\')">Children</a></li>\n      <li ng-show="showdetails" ng-class="{active:tabmode==\'details\'}"><a style="cursor:pointer;" ng-click="setmode(\'details\')">Data</a></li>\n      <li ng-repeat="tab in blueprint.tabs" ng-class="{active:tabmode==tab.name}"><a style="cursor:pointer;" ng-click="setmode(tab.name)">{{ tab.name | ucfirst }}</a></li>\n      \n      <li ng-show="settings.showdigger && !issupplychain" ng-class="{active:tabmode==\'digger\'}"><a style="cursor:pointer;" ng-click="setmode(\'digger\')">Digger</a></li>\n      <li ng-show="settings.showjson" ng-class="{active:tabmode==\'json\'}"><a style="cursor:pointer;" ng-click="setmode(\'json\')">JSON</a></li>\n    </ul>\n\n    <!--\n      nav pills\n     -->\n    <div class="row" style="border-bottom:1px dotted #e5e5e5;margin-bottom:10px;" ng-if="!settings.readonly && (tabmode!=\'children\')">\n      <ul class="nav nav-pills">\n        <li ng-show="edit_container.tag()!=\'_supplychain\' && settings.showup && !addmode">\n          <a href="" ng-click="selectparent()">up</a>\n        </li>\n        <li ng-show="addmode || settings.cancelbutton">\n          <a href="" ng-click="cancelcontainer()">cancel</a>\n        </li>\n        <li ng-hide="hidedelete()">\n          <a href="" ng-click="deletecontainer()">delete</a>\n        </li>\n        <li ng-hide="edit_container.tag()==\'_supplychain\' || haserror()">\n          <a href="" ng-click="savecontainer()">save</a>\n        </li>\n      </ul>\n\n    </div>\n\n    <div id="myTabContent" class="tab-content">\n      <!--\n        children\n       -->\n      <div ng-show="showchildren" ng-class="{active:tabmode==\'children\', in:tabmode==\'children\', fade:tabmode!=\'children\'}" class="tab-pane" id="children">\n\n        <div class="row" ng-hide="settings.readonly" style="border-bottom:1px dotted #e5e5e5;margin-bottom:10px;">\n          <div class="col-sm-12">\n\n            <!--\n              <div ng-repeat="blueprint in addchildren" style="margin-bottom:5px;">\n                <button style="width:100%;" class="btn btn-sm btn-info" ng-click="add_from_blueprint(blueprint)">new {{ blueprint.title() }}</button>\n              </div>\n              <div ng-repeat="button in settings.buttons" style="margin-bottom:5px;">\n                <button style="width:100%;" ng-hide="settings.hidebuttonfn(button)" ng-class="\'btn btn-sm \' + button.class" ng-click="settings_button_clicked(button)">{{ button.title }}</button>\n              </div>\n            -->\n\n            <ul class="nav nav-pills">\n              <li class="dropdown">\n                <a class="dropdown-toggle" data-toggle="dropdown" href="#">\n                  view <span class="caret"></span>\n                </a>\n                <ul class="dropdown-menu" role="menu">\n                  <li><a href="" ng-click="settings.view=\'icons\'">icons</a></li>\n                  <li><a href="" ng-click="settings.view=\'details\'">details</a></li>\n                </ul>\n              </li>\n              <li class="dropdown">\n                <a class="dropdown-toggle" data-toggle="dropdown" href="#">\n                  new <span class="caret"></span>\n                </a>\n                <ul class="dropdown-menu" role="menu">\n                  <li ng-repeat="blueprint in addchildren"><a href="" ng-click="add_from_blueprint(blueprint)">{{ blueprint.title() }}</a></li>\n                </ul>\n              </li>\n              <li ng-repeat="button in settings.buttons" ng-hide="settings.hidebuttonfn(button)" >\n                <a href="" ng-click="settings_button_clicked(button)">{{ button.title }}</a>\n              </li>\n              <li ng-show="edit_container.tag()!=\'_supplychain\' && settings.showup && !addmode">\n                <a href="" ng-click="selectparent()">up</a>\n              </li>\n              <div ng-if="settings.showselector" class="pull-right col-sm-5">\n                <div>\n                  <div class="col-sm-10"><input type="text" class="form-control" ng-model="settings.child_selector" /></div>\n                  <div class="col-sm-2"><a class="btn btn-sm" href="" ng-click="$emit(\'viewer:reset_selector\')">reset</a></div>\n                </div>\n              </div>\n            </ul>\n\n          </div>\n        </div>\n\n        <div class="row">\n          <div class="col-sm-12">\n\n            <!--\n              CHILDREN LOOP\n             -->\n\n             <div ng-if="settings.view==\'details\'">\n               <table class="table table-striped">\n                  <tbody>\n                    <tr class="viewer-details-row" ng-repeat="$digger in children | viewersort" ng-click="click_container($digger)">\n                      <td>\n                        <i class="fa icon digger-details-icon" ng-class="geticon($digger)"></i>\n                      </td>\n                      <td>\n                        {{ $digger.title() }}\n                      </td>\n                      <td>\n                        <small>{{ tag_summary($digger) }}</small>\n                      </td>\n                      <td>\n                        <small>{{ class_summary($digger) }}</small>\n                      </td>\n                      <td>\n                        <small>{{ id_summary($digger) }}</small>\n                      </td>\n                    </tr>\n                  </tbody>\n                </table>\n              </div>\n              <div ng-if="settings.view==\'icons\'">\n                <div class="digger-viewer-container" ng-class="{selected:$digger.data(\'selected\')}" ng-repeat="$digger in children | viewersort" ng-click="click_container($digger)" ng-dblclick="click_container($digger, true)">\n\n                  <div style="margin-bottom:5px;">\n                    <i class="fa icon viewer-icon" ng-class="geticon($digger)"></i>\n                  </div>\n                  <div>\n                    {{ $digger.title() }}\n                  </div>\n\n                </div>\n              </div>\n\n\n          </div>\n        </div>\n      </div>\n\n\n      <!--\n        details\n       -->\n      <div ng-show="showdetails" ng-class="{active:tabmode==\'details\', in:tabmode==\'details\', fade:tabmode!=\'details\'}" class="tab-pane" id="details" style="margin-top:20px;">\n         <form class="form form-horizontal" name="containerForm" onSubmit="return false;" ng-hide="deletemode">\n\n            <fieldset>\n              \n                <form novalidate>\n                  <digger-form showedit="settings.showedit" readonly="{{ settings.readonly }}" fieldclass="{{ settings.fieldclass }}" fields="blueprint.fields" container="edit_container" />\n                </form>\n              \n            </fieldset>\n\n          </form>\n\n\n        \n\n\n        \n\n      </div>\n\n\n      <!--\n        Digger\n       -->\n      <div ng-show="settings.showdigger && !issupplychain" ng-class="{active:tabmode==\'digger\', in:tabmode==\'digger\', fade:tabmode!=\'digger\'}" class="tab-pane" id="digger" style="margin-top:20px;">\n\n\n\n        <form novalidate>\n          <digger-form readonly="{{ settings.readonly }}" fieldclass="{{ settings.fieldclass }}" fields="digger_fields" container="edit_container" />\n        </form>\n\n        <hr ng-show="(settings.container_url || settings.container_branch)" />\n        \n        <div class="row" ng-show="(issaved && settings.container_url)">\n          <form class="form form-horizontal">\n          <div class="form-group">\n            <label for="warehouselink" class="col-sm-2 control-label ng-binding">REST URL:</label>\n            <div class="col-sm-6" style="overflow:none;">\n              <input type="text" readonly class="form-control" id="containerurl" ng-model="container_url" />\n            </div>\n            <div class="col-sm-3">\n              <!--<a ng-href="{{ container_url }}" target="_blank" class="btn btn-info">open</a>-->\n              <button ng-click="selectcontainerurl()" href="" class="btn btn-info">select</a>\n            </div>\n          </div>\n          </form>\n        </div>\n\n        <div class="row" ng-show="(issaved && settings.container_branch)">\n          <form class="form form-horizontal">\n          <div class="form-group">\n            <label for="warehouselink" class="col-sm-2 control-label ng-binding">Branch URL:</label>\n            <div class="col-sm-6" style="overflow:none;">\n              <input id="branchurl" type="text" readonly class="form-control" ng-model="container_branch" />\n            </div>\n            <div class="col-sm-3">\n              <button ng-click="selectbranchurl()" href="" class="btn btn-info">select</a>\n            </div>\n          </div>\n          </form>\n        </div>\n\n      </div>\n\n      <!--\n        JSON\n       -->\n      <div ng-show="settings.showjson" ng-class="{active:tabmode==\'json\', in:tabmode==\'json\', fade:tabmode!=\'json\'}" class="tab-pane" id="json" style="margin-top:20px;">\n\n        <digger-json container="container" />\n\n      </div>\n\n\n\n      <!--\n        tabs\n       -->\n      <div ng-repeat="tab in blueprint.tabs" ng-show="tabmode==tab.name" ng-class="{active:tabmode==tab.name, in:tabmode==tab.name, fade:tabmode!=tab.name}" class="tab-pane" id="{{ tab.name }}" style="margin-top:20px;">\n\n        <div ng-if="!tab.type">\n          <form novalidate>\n            <digger-form readonly="{{ settings.readonly }}" fields="tab.fields" container="edit_container" />\n          </form>\n        </div>\n        <div ng-if="tab.type">\n          <digger-field readonly="settings.readonly" field="tab" container="edit_container" />\n        </div>\n        \n\n      </div>\n\n    </div>\n\n    <div ng-cloak ng-if="tabmode!=\'children\' && !settings.readonly" class="text-center">\n      <a class="btn btn-warning" ng-hide="hidedelete()" href="" ng-click="deletecontainer()">delete</a>\n      <a class="btn btn-success" ng-hide="edit_container.tag()==\'_supplychain\' || haserror()" href="" ng-click="savecontainer()">save</a>\n    </div>\n  </div>\n</div>';
 });
 require.register("binocarlos-digger-viewer-for-angular/jsonviewer.js", function(exports, require, module){
 module.exports = '<div id="htmlholder" style="width:100%;" ng-bind-html="jsonhtml">\n</div>';
@@ -2078,7 +2126,7 @@ require.register("binocarlos-digger-bootstrap-for-angular/index.js", function(ex
 
 angular
   .module('digger.bootstrap', [
-    
+    'digger.utils'
   ])
 
   /*
@@ -2202,54 +2250,201 @@ angular
     
   })
 
-
   /*
   
-    make sure that the $digger object has been loaded onto the page
+    XML Processor
     
   */
-  .run([function($rootScope, xmlDecoder){
+  .config(['$provide', function ($provide) {
     
-    /*
+    $provide.factory('xmlHttpInterceptor', ['xmlFilter', function (xmlFilter) {
+      return function (promise) {
+        return promise.then(function (response) {
+          response.xml = xmlFilter(response.data);
+          return response;
+        });
+      };
+    }]);
     
-      auto template injection
-      
-      this is for when the templates are embedded into the page manually
-    */
-    var templates = {};
+  }])
 
-    var scripts = angular.element(document).find('script');
+  .factory('xmlEncoder', function(){
 
-    for(var i=0; i<scripts.length; i++){
-      var script = angular.element(scripts[i]);
-      var html = script.html();
-      if(script.attr('type')==='digger/field'){
-        var name = script.attr('name');
-        var html = script.html();
-        if($digger.config.debug){
-          console.log('-------------------------------------------');
-          console.log('add template: ' + name);
-          console.log(html);
+    function string_factory(data, depth){
+
+      var meta = data._digger || {};
+      var children = data._children || [];
+      var attr = data;
+      depth = depth || 0;
+
+      function get_indent_string(){
+        var st = "\t";
+        var ret = '';
+        for(var i=0; i<depth; i++){
+          ret += st;
         }
-        $digger.template.add(name, html);
+        return ret;
       }
-      else if(script.attr('type')==='digger/blueprint'){
-        var blueprint_container = xmlDecoder(html);
-        if(blueprint_container){
-          $digger.blueprint.add(blueprint_container);
+
+      var pairs = {};
+
+      if(meta.id && meta.id.length>0){
+        pairs.id = meta.id;
+      }
+
+      if(meta.class && angular.isArray(meta.class) && meta.class.length>0){
+        pairs.class = meta.class.join(' ');
+      }
+
+      var pair_strings = [];
+
+      Object.keys(attr || {}).forEach(function(key){
+        var val = attr[key];
+        if(key.indexOf('_')===0){
+          return;
         }
+        if(key=='$$hashKey'){
+          return;
+        }
+        pairs[key] = val;
+      })
+      
+      Object.keys(pairs || {}).forEach(function(field){
+        var value = pairs[field];
+      
+        if(value!=null && value!=''){
+          pair_strings.push(field + '="' + value + '"');  
+        }
+      })
+
+      if(children && children.length>0){
+        var ret = get_indent_string() + '<' + meta.tag + ' ' + pair_strings.join(' ') + '>' + "\n";
+
+        children.forEach(function(child){      
+          ret += string_factory(child, depth+1);
+        })
+
+        ret += get_indent_string() + '</' + meta.tag + '>' + "\n";
+
+        return ret;    
+      }
+      else{
+        return get_indent_string() + '<' + meta.tag + ' ' + pair_strings.join(' ') + ' />' + "\n";
       }
     }
 
-    /*
-    
-      DO BLUEPRINT AUTO INJECTION HERE
+    return string_factory;
+
+  })
+
+  .factory('xmlDecoder', function(xmlParser){
+    return function(xml){
+      xml = xml.replace(/^[^<]*/, '').replace(/[^>]*$/, '');
+
+      var domElement = xmlParser.parse(xml);
+      var documentElement = domElement.documentElement;
+
+      function process_elem(xml_elem){
+        var attr = {};
+        
+        for(var i=0; i<xml_elem.attributes.length; i++){
+          var node_attr = xml_elem.attributes[i];
+          attr[node_attr.nodeName] = node_attr.nodeValue;
+        }
+
+        var classnames = (attr.class || '').split(/[\s,]+/);
+        delete(attr.class);
+        var id = attr.id;
+        delete(attr.id);
+
+        var container = $digger.container(xml_elem.tagName);  
+
+        classnames.forEach(function(classname){
+          container.addClass(classname);
+        })
+
+        if(id){
+          container.id(id);
+        }
+
+        Object.keys(attr || {}).forEach(function(prop){
+          var val = attr[prop];
+          if(('' + val).toLowerCase()==="true"){
+            val = true;
+          }
+          else if(('' + val).toLowerCase()==="false"){
+            val = false;
+          }
+          else if(('' + val).match(/^-?\d+(\.\d+)?$/)){
+            var num = parseFloat(val);
+            if(!isNaN(num)){
+              val = num;
+            }
+          }
+          container.attr(prop, val);
+        })
+
+        var child_models = [];
+
+        for(var j=0; j<xml_elem.childNodes.length; j++){
+          var child_node = xml_elem.childNodes[j];
+          if(child_node.nodeType==1){
+            var child = process_elem(child_node);
+            child_models.push(child.get(0));
+          }          
+        }
+
+        container.get(0)._children = child_models;
+
+        return container;
+      }
+
+      // invalid XML
       
-    */
-   
+      if(documentElement.nodeName=='html'){
+        return null;
+      }
+      else{
+        return process_elem(documentElement);
+      }
+    }
+  })
+
+  .factory('xmlParser', ['$window', function ($window) {
+
+    function MicrosoftXMLDOMParser() {
+      this.parser = new $window.ActiveXObject('Microsoft.XMLDOM');
+    }
+
+    MicrosoftXMLDOMParser.prototype.parse = function (input) {
+      this.parser.async = false;
+      return this.parser.loadXml(input);
+    };
+
+    function XMLDOMParser() {
+      this.parser = new $window.DOMParser();
+    }
+
+    XMLDOMParser.prototype.parse = function (input) {
+      return this.parser.parseFromString(input, 'text/xml');
+    };
+
+    if ($window.DOMParser) {
+      return new XMLDOMParser();
+    } else if ($window.ActiveXObject) {
+      return new MicrosoftXMLDOMParser();
+    } else {
+      throw new Error('Cannot parser XML in this environment.');
+    }
+
   }])
 
-
+  .filter('xml', ['xmlParser', function (xmlParser) {
+    return function (input) {
+      var xmlDoc = xmlParser.parse(input);
+      return angular.element(xmlDoc);
+    };
+  }])
 
   /*
   
@@ -2259,59 +2454,6 @@ angular
   .factory('$digger', function(){
     return window.$digger;
   })
-
-  /*
-  
-    the root controller gives access to things like the user and root warehouse
-    
-  */
-  .controller('DiggerRootCtrl', function($scope, $rootScope, $digger){
-
-    /*
-    
-      expose the connect command - this enables warehouses to be made from directives
-      
-    */
-    $scope.connect = $digger.connect;
-
-    /*
-    
-      expose the digger user - this is null if not logged in
-      
-    */
-    $scope.user = $digger.user;
-
-    /*
-    
-      expose the root warehouse - this can be used a the root container for the page
-      
-    */
-    $scope.warehouse = $digger.connect($digger.config.root_warehouse || '/');
-    $rootScope.warehouse = $scope.warehouse;
-
-  })
-
-if(!window.$digger){
-  throw new Error('$digger must be loaded on the same page to use the digger angular module');
-}
-else{
-  //window.$digger.on('connect', function(){
-  // choose what application to boot - either a user defined one or the default digger one
-
-  /*
-  
-    rely on the socket buffer to hold requests before $digger is connected
-
-    this means we can boot into angular right away on not have markup hanging around on the page
-    for a split second
-    
-  */
-  var app = window.$digger.config.application || 'digger';
-  document.documentElement.setAttribute('ng-controller', 'DiggerRootCtrl');
-  angular.element(document).ready(function() {
-    angular.bootstrap(document, [app]);
-  });
-}
 });
 require.register("binocarlos-digger-folders/index.js", function(exports, require, module){
 var template = require('./template');
@@ -2581,192 +2723,108 @@ angular
     'digger.filters',
     'digger.repeat'
   ])
-  .config(['$provide', function ($provide) {
+
+  /*
+  
+    the root controller gives access to things like the user and root warehouse
     
-    $provide.factory('xmlHttpInterceptor', ['xmlFilter', function (xmlFilter) {
-      return function (promise) {
-        return promise.then(function (response) {
-          response.xml = xmlFilter(response.data);
-          return response;
-        });
-      };
-    }]);
+  */
+  .controller('DiggerRootCtrl', function($scope, $rootScope, $digger){
+
+    /*
     
-  }])
-  .factory('xmlEncoder', function(){
-
-    function string_factory(data, depth){
-
-      var meta = data._digger || {};
-      var children = data._children || [];
-      var attr = data;
-      depth = depth || 0;
-
-      function get_indent_string(){
-        var st = "\t";
-        var ret = '';
-        for(var i=0; i<depth; i++){
-          ret += st;
-        }
-        return ret;
-      }
-
-      var pairs = {};
-
-      if(meta.id && meta.id.length>0){
-        pairs.id = meta.id;
-      }
-
-      if(meta.class && angular.isArray(meta.class) && meta.class.length>0){
-        pairs.class = meta.class.join(' ');
-      }
-
-      var pair_strings = [];
-
-      Object.keys(attr || {}).forEach(function(key){
-        var val = attr[key];
-        if(key.indexOf('_')===0){
-          return;
-        }
-        if(key=='$$hashKey'){
-          return;
-        }
-        pairs[key] = val;
-      })
+      expose the connect command - this enables warehouses to be made from directives
       
-      Object.keys(pairs || {}).forEach(function(field){
-        var value = pairs[field];
+    */
+    $scope.connect = $digger.connect;
+
+    /*
+    
+      expose the digger user - this is null if not logged in
       
-        if(value!=null && value!=''){
-          pair_strings.push(field + '="' + value + '"');  
-        }
-      })
+    */
+    $scope.user = $digger.user;
 
-      if(children && children.length>0){
-        var ret = get_indent_string() + '<' + meta.tag + ' ' + pair_strings.join(' ') + '>' + "\n";
-
-        children.forEach(function(child){      
-          ret += string_factory(child, depth+1);
-        })
-
-        ret += get_indent_string() + '</' + meta.tag + '>' + "\n";
-
-        return ret;    
-      }
-      else{
-        return get_indent_string() + '<' + meta.tag + ' ' + pair_strings.join(' ') + ' />' + "\n";
-      }
-    }
-
-    return string_factory;
+    /*
+    
+      expose the root warehouse - this can be used a the root container for the page
+      
+    */
+    $scope.warehouse = $digger.connect($digger.config.root_warehouse || '/');
+    $rootScope.warehouse = $scope.warehouse;
+    $rootScope.blueprint = $digger.blueprint;
 
   })
 
-  .factory('xmlDecoder', function(xmlParser){
-    return function(xml){
-      var domElement = xmlParser.parse(xml);
-      var documentElement = domElement.documentElement;
 
-      function process_elem(xml_elem){
-        var attr = {};
-        
-        for(var i=0; i<xml_elem.attributes.length; i++){
-          var node_attr = xml_elem.attributes[i];
-          attr[node_attr.nodeName] = node_attr.nodeValue;
-        }
-
-        var classnames = (attr.class || '').split(/[\s,]+/);
-        delete(attr.class);
-        var id = attr.id;
-        delete(attr.id);
-
-        var container = $digger.container(xml_elem.tagName);  
-
-        classnames.forEach(function(classname){
-          container.addClass(classname);
-        })
-
-        if(id){
-          container.id(id);
-        }
-
-        Object.keys(attr || {}).forEach(function(prop){
-          var val = attr[prop];
-          if(('' + val).toLowerCase()==="true"){
-            val = true;
-          }
-          else if(('' + val).toLowerCase()==="false"){
-            val = false;
-          }
-          else if(('' + val).match(/^-?\d+(\.\d+)?$/)){
-            var num = parseFloat(val);
-            if(!isNaN(num)){
-              val = num;
-            }
-          }
-          container.attr(prop, val);
-        })
-
-        var child_models = [];
-
-        for(var j=0; j<xml_elem.childNodes.length; j++){
-          var child_node = xml_elem.childNodes[j];
-          if(child_node.nodeType==1){
-            var child = process_elem(child_node);
-            child_models.push(child.get(0));
-          }          
-        }
-
-        container.get(0)._children = child_models;
-
-        return container;
-      }
-
-      // invalid XML
+  /*
+  
+    make sure that the $digger object has been loaded onto the page
+    
+  */
+  .run(function($rootScope, xmlDecoder, $safeApply){
+    
+    /*
+    
+      auto template injection
       
-      if(documentElement.nodeName=='html'){
-        return null;
+      this is for when the templates are embedded into the page manually
+    */
+    var templates = {};
+
+    var scripts = angular.element(document).find('script');
+
+    for(var i=0; i<scripts.length; i++){
+      var script = angular.element(scripts[i]);
+      var html = script.html();
+      if(script.attr('type')==='digger/field'){
+        var name = script.attr('name');
+        var html = script.html();
+        if($digger.config.debug){
+          console.log('-------------------------------------------');
+          console.log('add template: ' + name);
+          console.log(html);
+        }
+        $digger.template.add(name, html);
       }
-      else{
-        return process_elem(documentElement);
+      else if(script.attr('type')==='digger/blueprint'){
+        var blueprint_container = xmlDecoder(html);
+        if(blueprint_container){
+          $digger.blueprint.add(blueprint_container);
+        }
       }
     }
+
+    /*
+    
+      DO BLUEPRINT AUTO INJECTION HERE
+      
+    */
+   
   })
 
-  .factory('xmlParser', ['$window', function ($window) {
 
-    function MicrosoftXMLDOMParser() {
-      this.parser = new $window.ActiveXObject('Microsoft.XMLDOM');
-    }
+if(!window.$digger){
+  throw new Error('$digger must be loaded on the same page to use the digger angular module');
+}
+else{
+  //window.$digger.on('connect', function(){
+  // choose what application to boot - either a user defined one or the default digger one
 
-    MicrosoftXMLDOMParser.prototype.parse = function (input) {
-      this.parser.async = false;
-      return this.parser.loadXml(input);
-    };
+  /*
+  
+    rely on the socket buffer to hold requests before $digger is connected
 
-    function XMLDOMParser() {
-      this.parser = new $window.DOMParser();
-    }
-
-    XMLDOMParser.prototype.parse = function (input) {
-      return this.parser.parseFromString(input, 'text/xml');
-    };
-
-    if ($window.DOMParser) {
-      return new XMLDOMParser();
-    } else if ($window.ActiveXObject) {
-      return new MicrosoftXMLDOMParser();
-    } else {
-      throw new Error('Cannot parser XML in this environment.');
-    }
-
-  }])
-  .filter('xml', ['xmlParser', function (xmlParser) {
-    return function (input) {
-      var xmlDoc = xmlParser.parse(input);
-      return angular.element(xmlDoc);
-    };
-  }])
+    this means we can boot into angular right away on not have markup hanging around on the page
+    for a split second
+    
+  */
+  var app = window.$digger.config.application || 'digger';
+  document.documentElement.setAttribute('ng-controller', 'DiggerRootCtrl');
+  angular.element(document).ready(function() {
+    angular.bootstrap(document, [app]);
+  });
+}  
 });
 require.register("diggerserve-angular/index.js", function(exports, require, module){
 require('digger-for-angular');

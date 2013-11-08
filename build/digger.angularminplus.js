@@ -17107,7 +17107,7 @@ require.register("binocarlos-digger-bootstrap-for-angular/index.js", function(ex
 
 angular
   .module('digger.bootstrap', [
-    
+    'digger.utils'
   ])
 
   /*
@@ -17231,54 +17231,201 @@ angular
     
   })
 
-
   /*
   
-    make sure that the $digger object has been loaded onto the page
+    XML Processor
     
   */
-  .run([function($rootScope, xmlDecoder){
+  .config(['$provide', function ($provide) {
     
-    /*
+    $provide.factory('xmlHttpInterceptor', ['xmlFilter', function (xmlFilter) {
+      return function (promise) {
+        return promise.then(function (response) {
+          response.xml = xmlFilter(response.data);
+          return response;
+        });
+      };
+    }]);
     
-      auto template injection
-      
-      this is for when the templates are embedded into the page manually
-    */
-    var templates = {};
+  }])
 
-    var scripts = angular.element(document).find('script');
+  .factory('xmlEncoder', function(){
 
-    for(var i=0; i<scripts.length; i++){
-      var script = angular.element(scripts[i]);
-      var html = script.html();
-      if(script.attr('type')==='digger/field'){
-        var name = script.attr('name');
-        var html = script.html();
-        if($digger.config.debug){
-          console.log('-------------------------------------------');
-          console.log('add template: ' + name);
-          console.log(html);
+    function string_factory(data, depth){
+
+      var meta = data._digger || {};
+      var children = data._children || [];
+      var attr = data;
+      depth = depth || 0;
+
+      function get_indent_string(){
+        var st = "\t";
+        var ret = '';
+        for(var i=0; i<depth; i++){
+          ret += st;
         }
-        $digger.template.add(name, html);
+        return ret;
       }
-      else if(script.attr('type')==='digger/blueprint'){
-        var blueprint_container = xmlDecoder(html);
-        if(blueprint_container){
-          $digger.blueprint.add(blueprint_container);
+
+      var pairs = {};
+
+      if(meta.id && meta.id.length>0){
+        pairs.id = meta.id;
+      }
+
+      if(meta.class && angular.isArray(meta.class) && meta.class.length>0){
+        pairs.class = meta.class.join(' ');
+      }
+
+      var pair_strings = [];
+
+      Object.keys(attr || {}).forEach(function(key){
+        var val = attr[key];
+        if(key.indexOf('_')===0){
+          return;
         }
+        if(key=='$$hashKey'){
+          return;
+        }
+        pairs[key] = val;
+      })
+      
+      Object.keys(pairs || {}).forEach(function(field){
+        var value = pairs[field];
+      
+        if(value!=null && value!=''){
+          pair_strings.push(field + '="' + value + '"');  
+        }
+      })
+
+      if(children && children.length>0){
+        var ret = get_indent_string() + '<' + meta.tag + ' ' + pair_strings.join(' ') + '>' + "\n";
+
+        children.forEach(function(child){      
+          ret += string_factory(child, depth+1);
+        })
+
+        ret += get_indent_string() + '</' + meta.tag + '>' + "\n";
+
+        return ret;    
+      }
+      else{
+        return get_indent_string() + '<' + meta.tag + ' ' + pair_strings.join(' ') + ' />' + "\n";
       }
     }
 
-    /*
-    
-      DO BLUEPRINT AUTO INJECTION HERE
+    return string_factory;
+
+  })
+
+  .factory('xmlDecoder', function(xmlParser){
+    return function(xml){
+      xml = xml.replace(/^[^<]*/, '').replace(/[^>]*$/, '');
+
+      var domElement = xmlParser.parse(xml);
+      var documentElement = domElement.documentElement;
+
+      function process_elem(xml_elem){
+        var attr = {};
+        
+        for(var i=0; i<xml_elem.attributes.length; i++){
+          var node_attr = xml_elem.attributes[i];
+          attr[node_attr.nodeName] = node_attr.nodeValue;
+        }
+
+        var classnames = (attr.class || '').split(/[\s,]+/);
+        delete(attr.class);
+        var id = attr.id;
+        delete(attr.id);
+
+        var container = $digger.container(xml_elem.tagName);  
+
+        classnames.forEach(function(classname){
+          container.addClass(classname);
+        })
+
+        if(id){
+          container.id(id);
+        }
+
+        Object.keys(attr || {}).forEach(function(prop){
+          var val = attr[prop];
+          if(('' + val).toLowerCase()==="true"){
+            val = true;
+          }
+          else if(('' + val).toLowerCase()==="false"){
+            val = false;
+          }
+          else if(('' + val).match(/^-?\d+(\.\d+)?$/)){
+            var num = parseFloat(val);
+            if(!isNaN(num)){
+              val = num;
+            }
+          }
+          container.attr(prop, val);
+        })
+
+        var child_models = [];
+
+        for(var j=0; j<xml_elem.childNodes.length; j++){
+          var child_node = xml_elem.childNodes[j];
+          if(child_node.nodeType==1){
+            var child = process_elem(child_node);
+            child_models.push(child.get(0));
+          }          
+        }
+
+        container.get(0)._children = child_models;
+
+        return container;
+      }
+
+      // invalid XML
       
-    */
-   
+      if(documentElement.nodeName=='html'){
+        return null;
+      }
+      else{
+        return process_elem(documentElement);
+      }
+    }
+  })
+
+  .factory('xmlParser', ['$window', function ($window) {
+
+    function MicrosoftXMLDOMParser() {
+      this.parser = new $window.ActiveXObject('Microsoft.XMLDOM');
+    }
+
+    MicrosoftXMLDOMParser.prototype.parse = function (input) {
+      this.parser.async = false;
+      return this.parser.loadXml(input);
+    };
+
+    function XMLDOMParser() {
+      this.parser = new $window.DOMParser();
+    }
+
+    XMLDOMParser.prototype.parse = function (input) {
+      return this.parser.parseFromString(input, 'text/xml');
+    };
+
+    if ($window.DOMParser) {
+      return new XMLDOMParser();
+    } else if ($window.ActiveXObject) {
+      return new MicrosoftXMLDOMParser();
+    } else {
+      throw new Error('Cannot parser XML in this environment.');
+    }
+
   }])
 
-
+  .filter('xml', ['xmlParser', function (xmlParser) {
+    return function (input) {
+      var xmlDoc = xmlParser.parse(input);
+      return angular.element(xmlDoc);
+    };
+  }])
 
   /*
   
@@ -17288,59 +17435,6 @@ angular
   .factory('$digger', function(){
     return window.$digger;
   })
-
-  /*
-  
-    the root controller gives access to things like the user and root warehouse
-    
-  */
-  .controller('DiggerRootCtrl', function($scope, $rootScope, $digger){
-
-    /*
-    
-      expose the connect command - this enables warehouses to be made from directives
-      
-    */
-    $scope.connect = $digger.connect;
-
-    /*
-    
-      expose the digger user - this is null if not logged in
-      
-    */
-    $scope.user = $digger.user;
-
-    /*
-    
-      expose the root warehouse - this can be used a the root container for the page
-      
-    */
-    $scope.warehouse = $digger.connect($digger.config.root_warehouse || '/');
-    $rootScope.warehouse = $scope.warehouse;
-
-  })
-
-if(!window.$digger){
-  throw new Error('$digger must be loaded on the same page to use the digger angular module');
-}
-else{
-  //window.$digger.on('connect', function(){
-  // choose what application to boot - either a user defined one or the default digger one
-
-  /*
-  
-    rely on the socket buffer to hold requests before $digger is connected
-
-    this means we can boot into angular right away on not have markup hanging around on the page
-    for a split second
-    
-  */
-  var app = window.$digger.config.application || 'digger';
-  document.documentElement.setAttribute('ng-controller', 'DiggerRootCtrl');
-  angular.element(document).ready(function() {
-    angular.bootstrap(document, [app]);
-  });
-}
 });
 require.register("binocarlos-digger-utils-for-angular/index.js", function(exports, require, module){
 /*
@@ -17482,6 +17576,8 @@ angular
 
         var warehouse = $rootScope.warehouse;
 
+        warehousepath = warehousepath || $scope.warehousepath;
+
         if(warehousepath){
           warehouse = $digger.connect(warehousepath);
         }
@@ -17510,6 +17606,31 @@ angular
     }
   })
 
+    /*
+  
+    a generic trigger for the warehouse loader above
+    
+  */
+  .directive('warehouse', function($warehouseLoader, $safeApply){
+    return {
+      restrict:'A',
+      // we want this going before even the repeat
+      // this lets us put the repeat and digger on the same tag
+      // <div digger warehouse="/" selector="*" digger-repeat="children()" />
+      priority: 1001,
+      scope:true,
+      link:function($scope, elem, $attrs){
+
+        $attrs.$observe('warehouse', function(warehousepath){
+          if(!warehousepath.match(/^\//)){
+            warehousepath = '/' + warehousepath;
+          }
+          $scope.warehousepath = warehousepath;
+          $scope.warehouse = $digger.connect(warehousepath);
+        })
+      }
+    }
+  })
 
   /*
   
@@ -17560,7 +17681,8 @@ angular
       }
 
       $scope.$on('$destroy', cleanup);
-        
+      
+      console.dir(container.toJSON());
       radio = container.radio();
       radio.bind();
 
