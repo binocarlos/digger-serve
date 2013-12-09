@@ -16,103 +16,17 @@
   Module dependencies.
 */
 
-var express = require('express');
 var http = require('http');
-var vhost = require('express-vhost');
-var Website = require('./website');
-var util = require('util');
-var EventEmitter = require('events').EventEmitter;
-var async = require('async');
-
-/*
 var express = require('express');
+
 var path = require('path');
 var EventEmitter = require('events').EventEmitter;
 var util = require('util');
-
+var ErrorHandler = require('./errorhandler');
+//var sockets = require('socket.io');
 var sockjs = require('sockjs');
 var RedisStore = require('connect-redis')(express);
-var ErrorHandler = require('./errorhandler');
-*/
-
-function DiggerServe(options){
-	EventEmitter.call(this);
-	this.options = options || {};
-	this.websites = [];
-	this.app = express();
-	this.http = http.createServer(this.app);
-}
-
-util.inherits(DiggerServe, EventEmitter);
-
-module.exports = DiggerServe;
-
-DiggerServe.prototype.website = function(options){
-	var website = new Website(options);
-	this.websites.push(website);
-	return website;
-}
-
-DiggerServe.prototype.listen = function(port, done){
-	var self = this;
-	if(arguments.length<=1){
-		done = port;
-		port = 80;
-	}
-
-	this.build(function(server){
-		self.http.listen(port, function(error){
-			done(error, port);
-		});
-	})
-}
-
-DiggerServe.prototype.build = function(done){	
-	
-	var self = this;
-	async.forEach(this.websites, function(website, nextwebsite){
-		website.build(function(error){
-			if(error){
-				nextwebsite(error);
-				return;
-			}
-
-			var domains = website.domains();
-
-			if(!domains){
-				throw new Error('no domains for website');
-			}
-			else{
-				if(typeof(domains)==='string'){
-					domains = [domains];
-				}
-				var catchall = domains.filter(function(domain){
-					return domain==='*';
-				}).length>0;
-
-				if(catchall){
-					self.app.use(website.app);
-				}
-				else{
-					domains.forEach(function(domain){
-						self._usevhost = true;
-						vhost.register(domain, website.app);
-					})
-				}
-			}
-
-			nextwebsite();
-		});
-	}, function(error){
-		if(error){
-			throw new Error(error);
-		}
-		if(self._usevhost){
-			self.app.use(vhost.vhost());
-		}
-		done();
-	})
-}
+var vhost = require('express-vhost');
 
 /*
 
@@ -120,6 +34,7 @@ DiggerServe.prototype.build = function(done){
 
   whatever orchestration that gets the server going can decide how to proxy the reqs
   
+*/
 
 function DiggerServe(options){
 	var self = this;
@@ -200,4 +115,4 @@ module.exports = function(options){
 
 	return new DiggerServe(options);
 
-}*/
+}

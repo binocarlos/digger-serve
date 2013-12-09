@@ -1,0 +1,11 @@
+<script>
+window.$diggerserve = 'yo';
+window.$diggerresult = null;
+var name = 'digger', secret ='yo';
+var xhr = new XMLHttpRequest();
+xhr.open('get', '/ping/' + name + '?secret=' + secret);
+xhr.onload = function (e) {
+	window.$diggerresult = JSON.parse(xhr.responseText);
+};
+xhr.send();
+</script>

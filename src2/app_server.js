@@ -54,7 +54,7 @@ module.exports = function(domains, configurefn){
 	var cookieParser = express.cookieParser(self.options.cookie_secret || 'rodneybatman');
 	
 	diggerapp.use(express.query());
-  	diggerapp.use(express.responseTime());
+  diggerapp.use(express.responseTime());
 	diggerapp.use(express.bodyParser());
 	diggerapp.use(cookieParser);
 	diggerapp.use(express.session({store: self.redisStore}));
