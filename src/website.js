@@ -26,6 +26,7 @@ function DiggerWebsite(options){
 	EventEmitter.call(this);
 	this.options = options || {};
 	this.app = express();
+	
 	if(this.options.parser){
 		this.app.use(express.query());
 		this.app.use(express.bodyParser());
@@ -46,6 +47,7 @@ function DiggerWebsite(options){
 	if(this.options.cors){
 		this.app.use(cors());
 	}
+	
 }
 
 util.inherits(DiggerWebsite, EventEmitter);

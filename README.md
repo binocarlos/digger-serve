@@ -1,26 +1,31 @@
 digger-serve
 ============
 
-A HTTP and websocket server for a digger application.
-
-## installation
-
-	$ npm install digger-serve --save
-
-## usage
-
-The role of this module is to bootstrap a web server that will mount several things:
-
- * a supplychain back to a digger reception server
- * an authentication app that sends login requests back to a digger warehouse
- * a session store plugged into Redis
- * a websocket server (via socket.io)
+An app server for digger websites.
 
 ```js
-var Serve = require('digger-serve');
+var port = process.env['DIGGER_APP_PORT'] || 8791;
+var DiggerServe = require('digger-serve');
 
-var app = Serve({
+var server = new DiggerServe();
 
+var website = server.website({
+	document_root:__dirname,
+	domains:'*',
+	session:true,
+	parser:true,
+	debug:true,
+	cors:true
 })
 
+website.app.get('/ping/:name', function(req, res){
+  res.json({
+    pong:20
+  })
+})
+
+server.listen(port, function(){
+  console.log('test server listening');
+  done();
+})  
 ```

@@ -15,6 +15,7 @@
 /*
   Module dependencies.
 */
+var sockjs = require('sockjs');
 
 /*
 

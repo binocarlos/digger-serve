@@ -6,14 +6,6 @@ test:
 		--growl \
 		test/test.js
 
-browserify:
-	browserify -r digger-sockets > build/digger.js
-
-uglify: browserify
-	uglifyjs build/digger.js > build/digger.min.js
-
-build: uglify
-
 install:
 	npm install
 

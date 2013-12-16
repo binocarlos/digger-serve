@@ -47,10 +47,14 @@ describe('digger server', function(){
           })
         })
 
-				server.listen(port, function(){
-					console.log('test server listening');
-					done();
-				})
+        setTimeout(function(){
+          server.listen(port, function(){
+            console.log('test server listening');
+            done();
+          })  
+        })
+
+				
       })
     })
   })
@@ -72,7 +76,7 @@ describe('digger server', function(){
           data.result.pong.should.equal(20);
           done();
         });
-      }, 2000)
+      }, 1000)
 
     });
   });

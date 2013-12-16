@@ -23,6 +23,7 @@ var Website = require('./website');
 var util = require('util');
 var EventEmitter = require('events').EventEmitter;
 var async = require('async');
+//var sockjs = require('sockjs');
 
 /*
 var express = require('express');
@@ -30,7 +31,7 @@ var path = require('path');
 var EventEmitter = require('events').EventEmitter;
 var util = require('util');
 
-var sockjs = require('sockjs');
+
 var RedisStore = require('connect-redis')(express);
 var ErrorHandler = require('./errorhandler');
 */
@@ -67,51 +68,109 @@ DiggerServe.prototype.listen = function(port, done){
 	})
 }
 
-DiggerServe.prototype.build = function(done){	
-	
+/*
+DiggerServe.prototype.ensure_sockets = function(done){
 	var self = this;
-	async.forEach(this.websites, function(website, nextwebsite){
-		website.build(function(error){
-			if(error){
-				nextwebsite(error);
+	if(this.sockets){
+		done && done(null, this.sockets);
+		return this.sockets;
+	}
+	this.sockets = sockjs.createServer();
+	this.sockets.on('connection', function(socket){
+		self.emit('socket_connection', socket);
+	});
+	this.sockets.installHandlers(this.http, {prefix:this.options.socketpath || '/digger/sockets'});
+	done && done(null, this.sockets);
+	return this.sockets;
+}
+*/
+
+DiggerServe.prototype.build = function(done){	
+	var self = this;
+	if(this._built){
+		done && done();
+		return;
+	}
+	this._built = true;
+
+	async.series([
+
+		function mount_sockets(next){
+			if(!self.options.sockets){
+				next();
 				return;
 			}
 
-			var domains = website.domains();
+			self.ensure_sockets(next);
+		},
 
-			if(!domains){
-				throw new Error('no domains for website');
+		function mount_websites(next){
+			async.forEach(self.websites, function(website, nextwebsite){
+				website.build(function(error){
+					if(error){
+						nextwebsite(error);
+						return;
+					}
+
+					var domains = website.domains();
+
+					if(!domains){
+						throw new Error('no domains for website');
+					}
+					else{
+						if(typeof(domains)==='string'){
+							domains = [domains];
+						}
+						var catchall = domains.filter(function(domain){
+							return domain==='*';
+						}).length>0;
+
+						if(catchall){
+							self.app.use(website.app);
+						}
+						else{
+							domains.forEach(function(domain){
+								self._usevhost = true;
+								vhost.register(domain, website.app);
+							})
+						}
+					}
+
+					nextwebsite();
+				});
+			}, function(error){
+				if(error){
+					throw new Error(error);
+				}
+				if(self._usevhost){
+					self.app.use(vhost.vhost());
+				}
+				next();
+			})
+		},
+
+		function error_handler(next){
+			if(!self.options.errorhandler){
+				next();
+				return;
 			}
-			else{
-				if(typeof(domains)==='string'){
-					domains = [domains];
-				}
-				var catchall = domains.filter(function(domain){
-					return domain==='*';
-				}).length>0;
 
-				if(catchall){
-					self.app.use(website.app);
-				}
-				else{
-					domains.forEach(function(domain){
-						self._usevhost = true;
-						vhost.register(domain, website.app);
-					})
-				}
-			}
-
-			nextwebsite();
-		});
-	}, function(error){
-		if(error){
-			throw new Error(error);
+			self.app.get('/__digger/assets/digger.png', function(req, res, next){
+				res.sendfile(path.normalize(__dirname + '/../assets/digger.png'));
+			})
+			self.app.use(function(req, res){
+				res.statusCode = 404;
+				res.send([
+					'<table width=100% height=100%><tr><td align=center valign=middle>',
+					'<span style="font-family:Arial;">',
+					'<img src="/__digger/assets/digger.png" />',
+					'<h2>Page / Website not found</h2>',
+					'</span>',
+					'</td></tr></table>'
+				].join(''))
+			})
 		}
-		if(self._usevhost){
-			self.app.use(vhost.vhost());
-		}
-		done();
-	})
+	], done)
 }
 
 /*
