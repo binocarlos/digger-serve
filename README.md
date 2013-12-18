@@ -18,12 +18,14 @@ var website = server.website({
 	cors:true
 })
 
-website.app.get('/ping/:name', function(req, res){
+// website is an express app
+website.get('/ping/:name', function(req, res){
   res.json({
     pong:20
   })
 })
 
+// server is a wrapper for a http.createServer
 server.listen(port, function(){
   console.log('test server listening');
   done();
