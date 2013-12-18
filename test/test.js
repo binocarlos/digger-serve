@@ -41,7 +41,7 @@ describe('digger server', function(){
 					cors:true
 				})
 
-        website.app.get('/ping/:name', function(req, res){
+        website.get('/ping/:name', function(req, res){
           res.json({
             pong:20
           })

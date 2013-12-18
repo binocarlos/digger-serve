@@ -22,49 +22,44 @@ var EventEmitter = require('events').EventEmitter;
 var RedisStore = require('connect-redis')(express);
 var cors = require('cors');
 
-function DiggerWebsite(options){
-	EventEmitter.call(this);
-	this.options = options || {};
-	this.app = express();
-	
-	if(this.options.parser){
-		this.app.use(express.query());
-		this.app.use(express.bodyParser());
+module.exports = function(options){
+	options = options || {};
+	var app = express();
+
+	if(options.parser){
+		app.use(express.query());
+		app.use(express.bodyParser());
 	}	
-	if(this.options.debug){
-		this.app.use(express.responseTime());
+	if(options.debug){
+		app.use(express.responseTime());
 	}
-	if(this.options.session){
-		var cookieParser = express.cookieParser(this.options.cookie_secret || 'rodneybatman');
+	if(options.session){
+		var cookieParser = express.cookieParser(options.cookie_secret || 'rodneybatman');
 		var redisStore = new RedisStore({
-			host:this.options.redis_host || process.env.DIGGER_REDIS_HOST || '127.0.0.1',
-			port:this.options.redis_port || process.env.DIGGER_REDIS_PORT || 6379,
-			pass:this.options.redis_pass || process.env.DIGGER_REDIS_PASSWORD || null
+			host:options.redis_host || process.env.DIGGER_REDIS_HOST || '127.0.0.1',
+			port:options.redis_port || process.env.DIGGER_REDIS_PORT || 6379,
+			pass:options.redis_pass || process.env.DIGGER_REDIS_PASSWORD || null
 		})
-		this.app.use(cookieParser);
-		this.app.use(express.session({store: redisStore}));
+		app.use(cookieParser);
+		app.use(express.session({store: redisStore}));
 	}
-	if(this.options.cors){
-		this.app.use(cors());
+	if(options.cors){
+		app.use(cors());
 	}
-	
-}
 
-util.inherits(DiggerWebsite, EventEmitter);
+	app.build = function(done){
+		app.use(app.router);
+		app.use(express.favicon(options.document_root + '/favicon.ico'));
+		app.use(express.static(options.document_root));
 
-module.exports = DiggerWebsite;
+		done && done();
+		return this;
+	}
 
-DiggerWebsite.prototype.build = function(done){
-	var self = this;
+	app.domains = function(arr){
+		return arr ? options.domains = arr : (options.domains || []);
+	}
 
-	this.app.use(this.app.router);
-	this.app.use(express.favicon(this.options.document_root + '/favicon.ico'));
-	this.app.use(express.static(this.options.document_root));
+	return app;
 
-	done && done();
-	return this;
-}
-
-DiggerWebsite.prototype.domains = function(arr){
-	return arr ? this.options.domains = arr : this.options.domains;
 }

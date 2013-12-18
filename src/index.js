@@ -49,7 +49,7 @@ util.inherits(DiggerServe, EventEmitter);
 module.exports = DiggerServe;
 
 DiggerServe.prototype.website = function(options){
-	var website = new Website(options);
+	var website = Website(options);
 	this.websites.push(website);
 	return website;
 }
@@ -126,12 +126,12 @@ DiggerServe.prototype.build = function(done){
 						}).length>0;
 
 						if(catchall){
-							self.app.use(website.app);
+							self.app.use(website);
 						}
 						else{
 							domains.forEach(function(domain){
 								self._usevhost = true;
-								vhost.register(domain, website.app);
+								vhost.register(domain, website);
 							})
 						}
 					}
@@ -172,91 +172,3 @@ DiggerServe.prototype.build = function(done){
 		}
 	], done)
 }
-
-/*
-
-  the constructor creates connectors which emit events for digger requests
-
-  whatever orchestration that gets the server going can decide how to proxy the reqs
-  
-
-function DiggerServe(options){
-	var self = this;
-
-	this.options = options || {};
-	this.express = express;
-	this.app = express();
-	this.server = http.createServer(this.app);
-
-	// our proxy the hell out of here
-	this.connector = function(req, res){
-		if(!req.headers){
-			req.headers = {};
-		}
-		self.emit('digger:request', req, res);
-	}
-
-	this.radio = function(action, channel, body){
-		self.emit('digger:radio', action, channel, body);
-	}
-
-	this.sockets = null;
-	this.redisStore = null;
-
-	this.app.use(vhost.vhost());
-
-	this.app.get('/__digger/assets/digger.png', function(req, res, next){
-		res.sendfile(path.normalize(__dirname + '/../assets/digger.png'));
-	})
-	this.app.use(function(req, res){
-		res.statusCode = 404;
-		res.send([
-			'<table width=100% height=100%><tr><td align=center valign=middle>',
-			'<span style="font-family:Arial;">',
-			'<img src="/__digger/assets/digger.png" />',
-			'<h2>Page / Website not found</h2>',
-			'</span>',
-			'</td></tr></table>'
-		].join(''))
-	})
-}
-
-util.inherits(DiggerServe, EventEmitter);
-
-DiggerServe.prototype.ensure_redis_store = function(){
-	if(this.redisStore){
-		return this.redisStore;
-	}
-	this.redisStore = new RedisStore({
-		host:this.options.redis_host || process.env.DIGGER_REDIS_HOST || '127.0.0.1',
-		port:this.options.redis_port || process.env.DIGGER_REDIS_PORT || 6379,
-		pass:this.options.redis_pass || process.env.DIGGER_REDIS_PASSWORD || null
-	})
-	return this.redisStore;
-}
-
-DiggerServe.prototype.ensure_sockets = function(){
-	if(this.sockets){
-		return this.sockets;
-	}
-	this.sockets = sockjs.createServer();
-	this.sockets.on('connection', this.socket_connector());
-	this.sockets.installHandlers(this.server, {prefix:'/digger/sockets'});
-	return this.sockets;
-}
-
-
-DiggerServe.prototype.http_connector = require('./http_connector');
-DiggerServe.prototype.socket_connector = require('./socket_connector');
-DiggerServe.prototype.app_server = require('./app_server');
-DiggerServe.prototype.digger_middleware = require('./digger_middleware');
-
-DiggerServe.prototype.listen = function(port, done){
-	this.server.listen(port, done);
-}
-
-module.exports = function(options){
-
-	return new DiggerServe(options);
-
-}*/
