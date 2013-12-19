@@ -28,7 +28,8 @@ module.exports = function(options){
 
 	if(options.parser){
 		app.use(express.query());
-		app.use(express.bodyParser());
+		app.use(express.json());
+		app.use(express.urlencoded());
 	}	
 	if(options.debug){
 		app.use(express.responseTime());
